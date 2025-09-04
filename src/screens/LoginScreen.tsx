@@ -1,9 +1,13 @@
-import React from "react";
+import React, { useState } from "react";
 import { styled } from "nativewind";
-import { View as RNView, Text as RNText, TextInput as RNTextInput, Pressable as RNPressable } from "react-native";
+import { View as RNView, Text as RNText, TextInput as RNTextInput, Pressable as RNPressable, Alert } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../App";
+
+import { AuthService } from "../application/services/AuthServices";
+import { AuthRepository } from "../infrastructure/repositories/AuthRepository";
+import Toast from "react-native-toast-message";
 
 // Styled components
 const View = styled(RNView);
@@ -15,30 +19,70 @@ type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "
 
 export default function LoginScreen() {
   const navigation = useNavigation<LoginScreenNavigationProp>();
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // Instanciamos el servicio con el repositorio
+  const authService = new AuthService(new AuthRepository());
+
+const handleLogin = async () => {
+  if (!phoneNumber) {
+    Alert.alert("Error", "Ingresa tu número de teléfono");
+    return;
+  }
+
+  try {
+    setLoading(true); // ⬅️ inicia el loading
+    const response = await authService.login(phoneNumber);
+    setLoading(false); // ⬅️ termina el loading
+
+    if (response.success) {
+      navigation.navigate("Tabs"); // navega al Home
+    } else {
+      Toast.show({
+        type: "error", // success | error | info
+        text1: response.message,
+        position: "bottom",
+        visibilityTime: 2000,
+      });
+    }
+  } catch (error: any) {
+    setLoading(false); // ⬅️ asegura que se desactive loading incluso si hay error
+    Alert.alert("Error", error.message || "Algo salió mal");
+  }
+};
+
 
   return (
     <View className="flex-1 justify-center items-center bg-blue-600 px-6">
       <View className="w-full bg-white/90 rounded-3xl p-8">
-        <Text className="text-4xl font-bold text-blue-700 mb-8 text-center">Bienvenido</Text>
+        <Text className="text-4xl font-bold text-blue-700 mb-8 text-center">Bienvenido!</Text>
 
         <TextInput
           placeholder="Número de teléfono"
           keyboardType="phone-pad"
           className="w-full border border-gray-300 rounded-xl px-4 py-3 mb-6 text-base"
+          value={phoneNumber}
+          onChangeText={(text) => setPhoneNumber(text.replace(/[^0-9]/g, ""))}
         />
 
         <Pressable
-          className="w-full bg-blue-700 rounded-xl py-3 items-center shadow-lg mb-6"
-          onPress={() => navigation.navigate("Tabs")}
+          className={`w-full rounded-xl py-3 items-center shadow-lg mb-6 ${
+            loading ? "bg-blue-400" : "bg-blue-700"
+          }`}
+          onPress={handleLogin}
+          disabled={loading} // Desactiva mientras carga
         >
-          <Text className="text-white font-semibold text-lg">Iniciar sesión</Text>
+          <Text className="text-white font-semibold text-lg">
+            {loading ? "Cargando..." : "Iniciar sesión"}
+          </Text>
         </Pressable>
 
         <View className="mt-4 items-center">
           <Text className="text-gray-700 mb-2">¿No tienes cuenta?</Text>
           <Pressable
             className="w-full bg-white border border-blue-700 rounded-xl py-3 items-center shadow"
-            onPress={() => alert("Aquí podrías navegar a un registro")}
+            onPress={() => Alert.alert("Registro", "Aquí podrías navegar a un registro")}
           >
             <Text className="text-blue-700 font-semibold text-lg">Regístrate</Text>
           </Pressable>
