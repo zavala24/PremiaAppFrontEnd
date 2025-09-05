@@ -8,8 +8,6 @@ export class AuthRepository implements IAuthRepository {
       numeroTelefono: phoneNumber,
     });
 
-    console.log("RESULT", response.data);
-
     // Mapear la respuesta del backend a un objeto User
     const user: User = {
       nombre: response.data.user.toLowerCase(), // "Julio Zavala"

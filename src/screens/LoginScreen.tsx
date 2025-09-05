@@ -1,15 +1,20 @@
 import React, { useState } from "react";
 import { styled } from "nativewind";
-import { View as RNView, Text as RNText, TextInput as RNTextInput, Pressable as RNPressable, Alert } from "react-native";
+import {
+  View as RNView,
+  Text as RNText,
+  TextInput as RNTextInput,
+  Pressable as RNPressable,
+  Alert,
+} from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../App";
-
-
-import { AuthRepository } from "../infrastructure/repositories/AuthRepository";
 import Toast from "react-native-toast-message";
-import { useAuth } from "../presentation/context/AuthContext"; // <-- AuthContext
+
+import { useAuth } from "../presentation/context/AuthContext";
 import { AuthService } from "../application/services/AuthServices";
+import { AuthRepository } from "../infrastructure/repositories/AuthRepository";
 
 // Styled components
 const View = styled(RNView);
@@ -21,12 +26,12 @@ type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "
 
 export default function LoginScreen() {
   const navigation = useNavigation<LoginScreenNavigationProp>();
+  const { login: setAuth } = useAuth();
+
   const [phoneNumber, setPhoneNumber] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const { login: setAuth } = useAuth(); // <-- hook de AuthContext
-
-  // Instanciamos el servicio con el repositorio
+  // Instanciamos el servicio de autenticación
   const authService = new AuthService(new AuthRepository());
 
   const handleLogin = async () => {
@@ -37,6 +42,8 @@ export default function LoginScreen() {
 
     try {
       setLoading(true);
+
+      // Llamada al endpoint de login
       const response = await authService.login(phoneNumber);
 
       setLoading(false);
@@ -46,7 +53,7 @@ export default function LoginScreen() {
         setAuth(response.data.user, response.data.token);
 
         // Navegamos a la pantalla principal
-        navigation.navigate("Tabs");
+        navigation.replace("Tabs");
       } else {
         Toast.show({
           type: "error",
@@ -64,7 +71,9 @@ export default function LoginScreen() {
   return (
     <View className="flex-1 justify-center items-center bg-blue-600 px-6">
       <View className="w-full bg-white/90 rounded-3xl p-8">
-        <Text className="text-4xl font-bold text-blue-700 mb-8 text-center">Bienvenido!</Text>
+        <Text className="text-4xl font-bold text-blue-700 mb-8 text-center">
+          Bienvenido!
+        </Text>
 
         <TextInput
           placeholder="Número de teléfono"
@@ -90,7 +99,9 @@ export default function LoginScreen() {
           <Text className="text-gray-700 mb-2">¿No tienes cuenta?</Text>
           <Pressable
             className="w-full bg-white border border-blue-700 rounded-xl py-3 items-center shadow"
-            onPress={() => Alert.alert("Registro", "Aquí podrías navegar a un registro")}
+            onPress={() =>
+              Alert.alert("Registro", "Aquí podrías navegar a un registro")
+            }
           >
             <Text className="text-blue-700 font-semibold text-lg">Regístrate</Text>
           </Pressable>
