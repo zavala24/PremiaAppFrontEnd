@@ -29,18 +29,12 @@ export default function TabNavigator() {
 
       if (route.name === "Home") iconName = focused ? "home" : "home-outline";
       else if (route.name === "Points") iconName = focused ? "trophy" : "trophy-outline";
-      else if (route.name === "Configuration") iconName = focused ? "settings" : "settings-outline";
-
       return <Ionicons name={iconName as any} size={size} color={color} />;
     },
   })}
 >
   <Tab.Screen name="Home" component={HomeScreen} />
   <Tab.Screen name="Points" component={PointsScreen} options={{ title: "Puntos" }} />
-  <Tab.Screen name="Configuration" component={ConfigurationScreen} options={{ title: "Configuración" }} />
-  <Tab.Screen name="Logout" component={LogoutScreen} options={{ title: "Cerrar sesión",tabBarIcon: ({ color, size }) => (<Ionicons name="log-out-outline" size={size} color={color} />),
-  }}
-/>
 
 </Tab.Navigator>
 
