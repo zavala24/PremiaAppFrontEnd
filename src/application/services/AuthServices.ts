@@ -1,5 +1,6 @@
+// src/application/services/AuthService.ts
+import { User } from "../../domain/entities/Usert";
 import { IAuthRepository } from "../../infrastructure/repositories/IAuthRepository";
-
 
 export interface ServiceResponse<T> {
   success: boolean;
@@ -10,17 +11,18 @@ export interface ServiceResponse<T> {
 export class AuthService {
   constructor(private authRepo: IAuthRepository) {}
 
-  async login(phoneNumber: string): Promise<ServiceResponse<{ token: string }>> {
+  async login(phoneNumber: string): Promise<ServiceResponse<{ user: User; token: string}>> {
     if (!phoneNumber) {
       return { success: false, message: "El teléfono es requerido" };
     }
 
     try {
       const result = await this.authRepo.login(phoneNumber);
+
       return {
         success: true,
         message: result.message || "Login exitoso",
-        data: { token: result.token },
+        data: { user: result.user, token: result.token},
       };
     } catch (error: any) {
       return {

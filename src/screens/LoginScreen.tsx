@@ -5,9 +5,11 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../App";
 
-import { AuthService } from "../application/services/AuthServices";
+
 import { AuthRepository } from "../infrastructure/repositories/AuthRepository";
 import Toast from "react-native-toast-message";
+import { useAuth } from "../presentation/context/AuthContext"; // <-- AuthContext
+import { AuthService } from "../application/services/AuthServices";
 
 // Styled components
 const View = styled(RNView);
@@ -22,36 +24,42 @@ export default function LoginScreen() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const { login: setAuth } = useAuth(); // <-- hook de AuthContext
+
   // Instanciamos el servicio con el repositorio
   const authService = new AuthService(new AuthRepository());
 
-const handleLogin = async () => {
-  if (!phoneNumber) {
-    Alert.alert("Error", "Ingresa tu número de teléfono");
-    return;
-  }
-
-  try {
-    setLoading(true); // ⬅️ inicia el loading
-    const response = await authService.login(phoneNumber);
-    setLoading(false); // ⬅️ termina el loading
-
-    if (response.success) {
-      navigation.navigate("Tabs"); // navega al Home
-    } else {
-      Toast.show({
-        type: "error", // success | error | info
-        text1: response.message,
-        position: "bottom",
-        visibilityTime: 2000,
-      });
+  const handleLogin = async () => {
+    if (!phoneNumber) {
+      Alert.alert("Error", "Ingresa tu número de teléfono");
+      return;
     }
-  } catch (error: any) {
-    setLoading(false); // ⬅️ asegura que se desactive loading incluso si hay error
-    Alert.alert("Error", error.message || "Algo salió mal");
-  }
-};
 
+    try {
+      setLoading(true);
+      const response = await authService.login(phoneNumber);
+
+      setLoading(false);
+
+      if (response.success && response.data) {
+        // Guardamos usuario y token en el AuthContext
+        setAuth(response.data.user, response.data.token);
+
+        // Navegamos a la pantalla principal
+        navigation.navigate("Tabs");
+      } else {
+        Toast.show({
+          type: "error",
+          text1: response.message,
+          position: "bottom",
+          visibilityTime: 2000,
+        });
+      }
+    } catch (error: any) {
+      setLoading(false);
+      Alert.alert("Error", error.message || "Algo salió mal");
+    }
+  };
 
   return (
     <View className="flex-1 justify-center items-center bg-blue-600 px-6">
@@ -71,7 +79,7 @@ const handleLogin = async () => {
             loading ? "bg-blue-400" : "bg-blue-700"
           }`}
           onPress={handleLogin}
-          disabled={loading} // Desactiva mientras carga
+          disabled={loading}
         >
           <Text className="text-white font-semibold text-lg">
             {loading ? "Cargando..." : "Iniciar sesión"}
