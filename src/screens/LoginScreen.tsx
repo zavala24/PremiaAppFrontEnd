@@ -46,7 +46,8 @@ export default function LoginScreen() {
         type: "error",
         text1: "Falta tu número",
         text2: "Ingresa tu número de teléfono",
-        position: "bottom",
+        position: "top",
+         visibilityTime: 2000,
       });
       return;
     }
@@ -55,16 +56,15 @@ export default function LoginScreen() {
       setLoading(true);
       const response = await authService.login(phoneNumber);
       setLoading(false);
-
-      if (response.success && response.data) {
-         await login(response.data.user, response.data.token);
+      if (response.success && response) {
+         await login(response.user, response.token);
         navigation.replace("Tabs");
       } else {
         Toast.show({
           type: "error",
           text1: response.message || "Error al iniciar sesión",
-          position: "bottom",
-          visibilityTime: 3000,
+          position: "top",
+          visibilityTime: 2000,
         });
       }
     } catch (error: any) {
@@ -73,8 +73,8 @@ export default function LoginScreen() {
         type: "error",
         text1: "Error de conexión",
         text2: error?.message || "No se pudo conectar con el servidor",
-        position: "bottom",
-        visibilityTime: 3000,
+        position: "top",
+        visibilityTime: 2000,
       });
     }
   };

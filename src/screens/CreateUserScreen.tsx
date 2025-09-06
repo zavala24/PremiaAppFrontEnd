@@ -57,7 +57,7 @@ export default function CreateUserScreen() {
         type: "success",
         text1: "Usuario creado",
         text2: `Teléfono: ${digits}`,
-        position: "bottom",
+        position: "top",
         visibilityTime: 2000, // 2s
         autoHide: true,
       });
@@ -71,7 +71,8 @@ export default function CreateUserScreen() {
         type: "error",
         text1: "Error al crear",
         text2: err?.message || "Inténtalo de nuevo",
-        position: "bottom",
+        position: "top",
+         visibilityTime: 2000,
       });
     }
   };

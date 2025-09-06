@@ -1,34 +1,36 @@
 // src/application/services/AuthService.ts
 import { User } from "../../domain/entities/User";
-import { IAuthRepository } from "../../infrastructure/repositories/IAuthRepository";
-
-export interface ServiceResponse<T> {
-  success: boolean;
-  message: string;
-  data?: T;
-}
+import { IAuthRepository } from "../../domain/repositories/IAuthRepository";
+import { AuthLoginResult } from "../../domain/types/AuthLoginResult";
 
 export class AuthService {
   constructor(private authRepo: IAuthRepository) {}
 
-  async login(phoneNumber: string): Promise<ServiceResponse<{ user: User; token: string}>> {
+  async login(phoneNumber: string): Promise<AuthLoginResult> {
     if (!phoneNumber) {
       return { success: false, message: "El teléfono es requerido" };
     }
 
     try {
       const result = await this.authRepo.login(phoneNumber);
-
       return {
         success: true,
-        message: result.message || "Login exitoso",
-        data: { user: result.user, token: result.token},
+        status: 200,
+        message: result.message ?? "Login exitoso",
+        user: result.user,
+        token: result.token,
       };
     } catch (error: any) {
-      return {
-        success: false,
-        message: error.response?.data?.message || error.message || "Error en login",
-      };
+      const status =
+        error?.response?.status ??
+        error?.status ??
+        error?.response?.data?.status;
+      const message =
+        error?.response?.data?.message ??
+        error?.message ??
+        "Error en login";
+      return { success: false, status, message };
     }
   }
 }
+

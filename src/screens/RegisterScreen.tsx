@@ -70,17 +70,24 @@ export default function RegisterScreen() {
     setLoading(true);
 
     try {
-      await userService.createUser({
-          telefono: digits,
-          nombre: nombre.trim(),
-          apellidoPaterno: apellidoPaterno.trim(),
-          apellidoMaterno: apellidoMaterno.trim(),
-          email: email.trim(),
-          role: "User"
+     const result = await userService.registerUser({
+        telefono: digits,
+        nombre: nombre.trim(),
+        apellidoPaterno: apellidoPaterno.trim(),
+        apellidoMaterno: apellidoMaterno.trim(),
+        email: email.trim(),
+        role: "User",
       });
 
       setLoading(false);
       resetForm();
+
+          Toast.show({
+          type: "success",               
+          text1: result.message,
+          position: "top",
+          visibilityTime: 2000,
+        });
 
       navigation.replace("Login", {
         fromRegister: true,
@@ -94,8 +101,8 @@ export default function RegisterScreen() {
         type: "error",
         text1: "Error al crear",
         text2: msg,
-        position: "bottom",
-        visibilityTime: 3000,
+        position: "top",
+        visibilityTime: 2000,
       });
     }
   };
@@ -113,33 +120,38 @@ export default function RegisterScreen() {
         className="flex-1"
         keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
       >
-        <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="px-6">
+        <ScrollView
+          className="px-6"
+          contentContainerStyle={{ flexGrow: 1 }}
+          keyboardShouldPersistTaps="handled"
+        >
           <View className="flex-1 items-center justify-center py-6">
             {/* Card compacta y centrada */}
-            <View
-              className="w-full rounded-3xl bg-white shadow-2xl p-6"
-              style={{ maxWidth: 420 }}
-            >
-              {/* Header dentro de la tarjeta */}
-            <View className="relative mb-3 h-10 justify-center">
-            {/* Botón volver a la izquierda */}
-            <Pressable
-                onPress={() => navigation.goBack()}
-                className="absolute left-0 h-10 w-10 items-center justify-center rounded-full bg-blue-50 active:bg-blue-100"
-                accessibilityRole="button"
-                accessibilityLabel="Volver"
-            >
-                {/* Usa tu ícono preferido aquí */}
-            <MaterialCommunityIcons name="chevron-left" size={26} color="#1D4ED8" />
-                {/* Si usas vector-icons:
-                    */}
-            </Pressable>
+            <View className="w-full rounded-3xl bg-white shadow-2xl p-6" style={{ maxWidth: 420 }}>
+              {/* Header dentro de la tarjeta (centrado y con botón clickable) */}
+              <View className="relative mb-3 h-10 justify-center">
+                <Pressable
+                  onPress={() => {
+                    if (navigation.canGoBack()) navigation.goBack();
+                    else navigation.replace("Login");
+                  }}
+                  style={{ elevation: 8 }} // Android
+                  className="absolute left-0 top-0 h-10 w-10 z-20 items-center justify-center
+                             rounded-full bg-blue-50 active:bg-blue-100"
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Volver"
+                >
+                  <MaterialCommunityIcons name="chevron-left" size={26} color="#1D4ED8" />
+                </Pressable>
 
-            {/* Título absolutamente centrado */}
-            <Text className="absolute left-0 right-0 text-center text-2xl font-extrabold text-blue-700">
-                Regístrate
-            </Text>
-            </View>
+                <Text
+                  pointerEvents="none"
+                  className="absolute inset-x-0 text-center text-2xl font-extrabold text-blue-700"
+                >
+                  Regístrate
+                </Text>
+              </View>
 
               <Text className="text-gray-500 text-center mb-4">
                 Completa tus datos para comenzar
@@ -147,7 +159,7 @@ export default function RegisterScreen() {
 
               <View className="h-[1px] bg-gray-100 mb-4" />
 
-              {/* Campos (más compactos) */}
+              {/* Campos */}
               <View className="gap-y-3">
                 {/* Teléfono */}
                 <View>

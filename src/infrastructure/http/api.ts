@@ -1,26 +1,34 @@
-// src/infrastructure/http/api.ts
-import axios from "axios";
+// src/http/api.ts
+import axios, { AxiosError } from "axios";
 
-export const api = axios.create({
-  baseURL: "http://192.168.1.43:5137/api",
-  timeout: 15000,
-  headers: { "Content-Type": "application/json" },
-});
+const BASE_URL = "http://192.168.1.43:5137/api";
 
-// Colocar / limpiar el token globalmente
-export const setAuthToken = (token?: string) => {
+const create = () => {
+  const i = axios.create({
+    baseURL: BASE_URL,
+    timeout: 15000,
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+  });
+
+  i.interceptors.response.use(
+    (r) => r,
+    (e: AxiosError<any>) => {
+      if (e.response) {
+        const d: any = e.response.data;
+        return Promise.reject(new Error(d?.message || `Request failed with status code ${e.response.status}`));
+      }
+      if (e.request) return Promise.reject(new Error("Network Error"));
+      return Promise.reject(new Error(e.message || "Request Error"));
+    }
+  );
+  return i;
+};
+
+export const api = create();        // autenticada (para endpoints protegidos)
+export const apiPublic = create();  // pública (para RegisterUser)
+
+export const setAuthToken = (token?: string | null) => {
   if (token) api.defaults.headers.common.Authorization = `Bearer ${token}`;
   else delete api.defaults.headers.common.Authorization;
 };
-
-// Interceptor de errores (mensaje amigable)
-api.interceptors.response.use(
-  (r) => r,
-  (err) => {
-    const status = err?.response?.status;
-    const message = err?.response?.data?.message || err.message || "Error de red";
-    if (status === 401) console.warn("401: sesión expirada");
-    if (status === 403) console.warn("403: sin permisos");
-    return Promise.reject(new Error(message));
-  }
-);
+export const clearAuthToken = () => delete api.defaults.headers.common.Authorization;
