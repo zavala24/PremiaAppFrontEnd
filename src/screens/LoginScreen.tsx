@@ -155,16 +155,11 @@ export default function LoginScreen() {
             <View className="flex-1 h-[1px] bg-gray-200" />
           </View>
 
-          {/* CTA registro */}
           <Pressable
-            onPress={() =>
-              Alert.alert("Registro", "Aquí podrías navegar a registro")
-            }
             className="rounded-2xl border border-blue-700 py-3 items-center bg-white"
+            onPress={() => navigation.navigate("Register")}
           >
-            <Text className="text-blue-700 font-semibold text-base">
-              Regístrate
-            </Text>
+            <Text className="text-blue-700 font-semibold text-base">Regístrate</Text>
           </Pressable>
 
           {/* Footer */}

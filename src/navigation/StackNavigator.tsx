@@ -2,9 +2,11 @@ import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import LoginScreen from "../screens/LoginScreen";
 import TabNavigator from "./TabNavigator";
+import RegisterScreen from "../screens/RegisterScreen";
 
 export type RootStackParamList = {
-  Login: undefined;
+  Login: { fromRegister?: boolean; registeredPhone?: string } | undefined;
+  Register: undefined;
   Tabs: undefined;
 };
 
@@ -18,6 +20,7 @@ export default function StackNavigator() {
     >
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Tabs" component={TabNavigator} />
+      <Stack.Screen name="Register" component={RegisterScreen} />
     </Stack.Navigator>
   );
 }
