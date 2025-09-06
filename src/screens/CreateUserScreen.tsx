@@ -47,7 +47,7 @@ export default function CreateUserScreen() {
     try {
       setLoading(true);
       await userService.createUser({
-        nombre: "Nuevo Usuario",
+        nombre: "",
         telefono: digits,
         role: "User",
       });
@@ -58,6 +58,8 @@ export default function CreateUserScreen() {
         text1: "Usuario creado",
         text2: `Teléfono: ${digits}`,
         position: "bottom",
+        visibilityTime: 2000, // 2s
+        autoHide: true,
       });
 
       setTelefono("");
@@ -119,7 +121,7 @@ export default function CreateUserScreen() {
                 onChangeText={handleChange}
                 maxLength={10}
                 keyboardType="phone-pad"
-                placeholder="Ingresa el número de teléfono"
+                placeholder="Número de teléfono"
                 placeholderTextColor="#9CA3AF"
                 className="flex-1 text-base text-gray-800"
                 accessible

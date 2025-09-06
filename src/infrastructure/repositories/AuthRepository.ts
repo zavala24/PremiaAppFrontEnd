@@ -15,7 +15,6 @@ export class AuthRepository implements IAuthRepository {
         role: data.role.toLowerCase(),
       };
 
-      console.log("✅ Usuario mapeado:", user);
       return {
         user,
         token: data.token,

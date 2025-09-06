@@ -33,7 +33,7 @@ type LoginScreenNavigationProp = NativeStackNavigationProp<
 
 export default function LoginScreen() {
   const navigation = useNavigation<LoginScreenNavigationProp>();
-  const { login: setAuth } = useAuth();
+  const { login } = useAuth();
 
   const [phoneNumber, setPhoneNumber] = useState("");
   const [loading, setLoading] = useState(false);
@@ -57,7 +57,7 @@ export default function LoginScreen() {
       setLoading(false);
 
       if (response.success && response.data) {
-        setAuth(response.data.user, response.data.token);
+         await login(response.data.user, response.data.token);
         navigation.replace("Tabs");
       } else {
         Toast.show({
