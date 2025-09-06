@@ -58,7 +58,7 @@ export default function TabNavigator() {
     >
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Points" component={PointsScreen} options={{ title: "Puntos" }} />
-      <Tab.Screen name="Configuration" component={ConfigurationScreen} />
+      <Tab.Screen name="Configuration" component={ConfigurationScreen} options={{ title: "Configuración" }}/>
 
       {/* Solo Admin o SuperAdmin ven este tab */}
       {(user?.role.toLocaleUpperCase() === "ADMIN" || user?.role.toLocaleUpperCase() === "SUPERADMIN") && (
@@ -69,7 +69,7 @@ export default function TabNavigator() {
         />
       )}
 
-      <Tab.Screen name="Logout" component={LogoutScreen} />
+      <Tab.Screen name="Logout" component={LogoutScreen} options={{ title: "Cerrar sesión" }}/>
     </Tab.Navigator>
   );
 }

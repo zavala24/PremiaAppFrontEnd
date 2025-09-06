@@ -15,12 +15,14 @@ export class AuthRepository implements IAuthRepository {
         role: data.role.toLowerCase(),
       };
 
+      console.log("✅ Usuario mapeado:", user);
       return {
         user,
         token: data.token,
         message: data.message ?? "Inicio de sesión exitoso",
       };
     } catch (e) {
+
       const err = e as AxiosError<any>;
 
       // Si no hay respuesta del servidor
