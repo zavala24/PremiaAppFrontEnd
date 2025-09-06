@@ -9,12 +9,12 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import type { RootStackParamList } from "../../App";
 import Toast from "react-native-toast-message";
 
 import { useAuth } from "../presentation/context/AuthContext";
 import { AuthService } from "../application/services/AuthServices";
 import { AuthRepository } from "../infrastructure/repositories/AuthRepository";
+import { RootStackParamList } from "../navigation/StackNavigator";
 
 // Styled components
 const View = styled(RNView);
