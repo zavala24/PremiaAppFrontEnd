@@ -34,39 +34,46 @@ export default function LoginScreen() {
   // Instanciamos el servicio de autenticación
   const authService = new AuthService(new AuthRepository());
 
-  const handleLogin = async () => {
-    if (!phoneNumber) {
-      Alert.alert("Error", "Ingresa tu número de teléfono");
-      return;
+const handleLogin = async () => {
+  if (!phoneNumber) {
+    Alert.alert("Error", "Ingresa tu número de teléfono");
+    return;
+  }
+
+  try {
+    setLoading(true);
+
+    // Llamada al endpoint de login
+    const response = await authService.login(phoneNumber);
+
+    setLoading(false);
+
+    if (response.success && response.data) {
+      // Guardamos usuario y token en el AuthContext
+      setAuth(response.data.user, response.data.token);
+
+      // Navegamos a la pantalla principal
+      navigation.replace("Tabs");
+    } else {
+      Toast.show({
+        type: "error",
+        text1: response.message || "Error al iniciar sesión",
+        position: "bottom",
+        visibilityTime: 3000,
+      });
     }
-
-    try {
-      setLoading(true);
-
-      // Llamada al endpoint de login
-      const response = await authService.login(phoneNumber);
-
-      setLoading(false);
-
-      if (response.success && response.data) {
-        // Guardamos usuario y token en el AuthContext
-        setAuth(response.data.user, response.data.token);
-
-        // Navegamos a la pantalla principal
-        navigation.replace("Tabs");
-      } else {
-        Toast.show({
-          type: "error",
-          text1: response.message,
-          position: "bottom",
-          visibilityTime: 2000,
-        });
-      }
-    } catch (error: any) {
-      setLoading(false);
-      Alert.alert("Error", error.message || "Algo salió mal");
-    }
-  };
+  } catch (error: any) {
+    console.log("CATCH")
+    setLoading(false);
+    Toast.show({
+      type: "error",
+      text1: "Error de conexión",
+      text2: error.message || "No se pudo conectar con el servidor",
+      position: "bottom",
+      visibilityTime: 3000,
+    });
+  }
+};
 
   return (
     <View className="flex-1 justify-center items-center bg-blue-600 px-6">

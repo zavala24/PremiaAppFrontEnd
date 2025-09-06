@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, ReactNode } from "react";
-import { User } from "../../domain/entities/Usert";
+import { User } from "../../domain/entities/User";
 
 type AuthContextType = {
   user: User | null;

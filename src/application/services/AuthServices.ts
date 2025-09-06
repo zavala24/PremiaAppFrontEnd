@@ -1,5 +1,5 @@
 // src/application/services/AuthService.ts
-import { User } from "../../domain/entities/Usert";
+import { User } from "../../domain/entities/User";
 import { IAuthRepository } from "../../infrastructure/repositories/IAuthRepository";
 
 export interface ServiceResponse<T> {

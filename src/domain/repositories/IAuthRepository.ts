@@ -1,4 +1,4 @@
-import { User } from "../../domain/entities/Usert";
+import { User } from "../entities/User";
 
 
 export interface IAuthRepository {
