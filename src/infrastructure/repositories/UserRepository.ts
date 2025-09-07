@@ -54,4 +54,9 @@ export class UserRepository implements IUserRepository {
 
     return { resp, user };
   }
+
+    async updateUser(payload: User): Promise<ServiceResponse> {
+    const res = await api.put("/User/UpdateUser", payload, { validateStatus: () => true });
+    return mapResponse(res);
+  }
 }
