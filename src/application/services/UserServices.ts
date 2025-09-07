@@ -17,4 +17,8 @@ export class UserService implements IUserService {
   registerUser(user: User): Promise<ServiceResponse> {
     return this.userRepository.registerUser(user);
   }
+
+    getUserByPhone(phoneNumber: string) {
+    return this.userRepository.getUserByPhone(phoneNumber);
+  }
 }

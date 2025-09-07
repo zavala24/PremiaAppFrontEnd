@@ -13,6 +13,7 @@ export class AuthRepository implements IAuthRepository {
       const user: User = {
         nombre: data.user.toLowerCase(),
         role: data.role.toLowerCase(),
+        telefono: data.telefono
       };
 
       return {
