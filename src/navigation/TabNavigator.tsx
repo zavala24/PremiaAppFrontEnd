@@ -21,9 +21,12 @@ const Tab = createBottomTabNavigator<TabParamList>();
 
 export default function TabNavigator() {
   const { user } = useAuth();
+  const role = user?.role?.toUpperCase(); // safe-guard
 
   return (
-    <Tab.Navigator id={undefined}
+    <Tab.Navigator
+      id={undefined}
+      initialRouteName="Home"  // 👈 IMPORTANTE: Home como ruta inicial
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarActiveTintColor: "#1D4ED8",
@@ -33,7 +36,7 @@ export default function TabNavigator() {
           paddingVertical: 8,
         },
         tabBarIcon: ({ focused, color, size }) => {
-          let iconName: string = "";
+          let iconName: keyof typeof Ionicons.glyphMap;
 
           switch (route.name) {
             case "Home":
@@ -51,17 +54,20 @@ export default function TabNavigator() {
             case "Logout":
               iconName = focused ? "log-out" : "log-out-outline";
               break;
+            default:
+              iconName = "ellipse"; // fallback
           }
-          return <Ionicons name={iconName as any} size={size} color={color} />;
+
+          return <Ionicons name={iconName} size={size} color={color} />;
         },
       })}
     >
-      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Home" component={HomeScreen} options={{ title: "Home" }} />
       <Tab.Screen name="Points" component={PointsScreen} options={{ title: "Puntos" }} />
-      <Tab.Screen name="Configuration" component={ConfigurationScreen} options={{ title: "Configuración" }}/>
+      <Tab.Screen name="Configuration" component={ConfigurationScreen} options={{ title: "Configuración" }} />
 
       {/* Solo Admin o SuperAdmin ven este tab */}
-      {(user?.role.toLocaleUpperCase() === "ADMIN" || user?.role.toLocaleUpperCase() === "SUPERADMIN") && (
+      {(role === "ADMIN" || role === "SUPERADMIN") && (
         <Tab.Screen
           name="CreateUser"
           component={CreateUserScreen}
@@ -69,7 +75,7 @@ export default function TabNavigator() {
         />
       )}
 
-      <Tab.Screen name="Logout" component={LogoutScreen} options={{ title: "Cerrar sesión" }}/>
+      <Tab.Screen name="Logout" component={LogoutScreen} options={{ title: "Cerrar sesión" }} />
     </Tab.Navigator>
   );
 }
