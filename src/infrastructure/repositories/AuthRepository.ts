@@ -1,37 +1,32 @@
-import axios, { AxiosError } from "axios";
-import { IAuthRepository } from "../../domain/repositories/IAuthRepository";
-import { User } from "../../domain/entities/User";
-
+// src/infrastructure/repositories/AuthRepository.ts
+import { IAuthRepository, LoginResponse } from "../../domain/repositories/IAuthRepository";
+import { apiPublic } from "../http/api";
 
 export class AuthRepository implements IAuthRepository {
-  async login(phoneNumber: string): Promise<{ user: User; token: string; message: string }> {
+  async login(phoneNumber: string, password?: string): Promise<LoginResponse> {
     try {
-      const { data } = await axios.post("http://192.168.1.43:5137/api/Auth/login", {
+      const payload = {
         numeroTelefono: phoneNumber,
-      });
-
-      const user: User = {
-        nombre: data.user.toLowerCase(),
-        role: data.role.toLowerCase(),
-        telefono: data.telefono
+        ...(password ? { password: password } : {}),
       };
 
+      const { data } = await apiPublic.post("/Auth/login", payload);
+      // El back ya responde plano con Status/Message/Token/User/Role/Telefono
       return {
-        user,
+        status: data.status ?? 0,
+        message: data.message ?? "",
         token: data.token,
-        message: data.message ?? "Inicio de sesión exitoso",
+        user: data.user,
+        role: data.role,
+        telefono: data.telefono,
       };
-    } catch (e) {
-
-      const err = e as AxiosError<any>;
-
-      // Si no hay respuesta del servidor
-      if (!err.response) {
-        throw new Error("Error de conexión: el servidor no responde.");
-      }
-
-      // Si hay respuesta con error HTTP
-      throw new Error(err.response.data?.message ?? "Error al iniciar sesión.");
+    } catch (e: any) {
+      const status = e?.response?.status ?? 0;
+      const message =
+        e?.response?.data?.message ??
+        e?.message ??
+        "No se pudo iniciar sesión.";
+      return { status, message };
     }
   }
 }

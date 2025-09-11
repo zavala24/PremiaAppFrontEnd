@@ -1,36 +1,47 @@
-// src/application/services/AuthService.ts
-import { User } from "../../domain/entities/User";
 import { IAuthRepository } from "../../domain/repositories/IAuthRepository";
-import { AuthLoginResult } from "../../domain/types/AuthLoginResult";
+import { User, Role } from "../../domain/entities/User";
+// importa normalizeRole (si lo dejaste en este mismo archivo, no necesitas import)
 
 export class AuthService {
-  constructor(private authRepo: IAuthRepository) {}
+  constructor(private repo: IAuthRepository) {}
 
-  async login(phoneNumber: string): Promise<AuthLoginResult> {
-    if (!phoneNumber) {
-      return { success: false, message: "El teléfono es requerido" };
-    }
+  async login(
+    phoneNumber: string,
+    password?: string
+  ): Promise<
+    | {
+        success: true;
+        user: User;
+        token: string;
+        role: Role;            // <= devolvemos Role, no string
+        message: string;
+      }
+    | { success: false; message: string; status?: number }
+  > {
+    const res = await this.repo.login(phoneNumber, password);
 
-    try {
-      const result = await this.authRepo.login(phoneNumber);
+    if (res.status === 200 && res.token && res.user) {
+      const role: Role = res.role ?? "User";
+
+      const user: User = {
+        nombre: res.user,
+        telefono: res.telefono,
+        role,                                  // <= ahora es Role
+      };
+
       return {
         success: true,
-        status: 200,
-        message: result.message ?? "Login exitoso",
-        user: result.user,
-        token: result.token,
+        user,
+        token: res.token,
+        role,
+        message: res.message ?? "Inicio de sesión exitoso",
       };
-    } catch (error: any) {
-      const status =
-        error?.response?.status ??
-        error?.status ??
-        error?.response?.data?.status;
-      const message =
-        error?.response?.data?.message ??
-        error?.message ??
-        "Error en login";
-      return { success: false, status, message };
     }
+
+    return {
+      success: false,
+      message: res.message ?? "No se pudo iniciar sesión",
+      status: res.status,
+    };
   }
 }
-

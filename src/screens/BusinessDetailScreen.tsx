@@ -34,7 +34,6 @@ export default function BusinessDetailScreen() {
   const b = params.business;
 
   const handleBack = () => {
-    console.log("BACK")
     if (navigation.canGoBack()) {
         navigation.goBack();
         return;

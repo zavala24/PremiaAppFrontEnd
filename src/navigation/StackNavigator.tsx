@@ -9,6 +9,7 @@ export type RootStackParamList = {
   Login: { fromRegister?: boolean; registeredPhone?: string } | undefined;
   Register: undefined;
   Tabs: undefined;
+  SellPoints: undefined; 
   BusinessDetail: {
     business: {
       id: number;
