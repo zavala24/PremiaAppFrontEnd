@@ -5,13 +5,14 @@ import { apiPublic } from "../http/api";
 export class AuthRepository implements IAuthRepository {
   async login(phoneNumber: string, password?: string): Promise<LoginResponse> {
     try {
+
       const payload = {
         numeroTelefono: phoneNumber,
         ...(password ? { password: password } : {}),
       };
-
+      
       const { data } = await apiPublic.post("/Auth/login", payload);
-      // El back ya responde plano con Status/Message/Token/User/Role/Telefono
+
       return {
         status: data.status ?? 0,
         message: data.message ?? "",

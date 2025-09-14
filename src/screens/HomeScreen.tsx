@@ -75,7 +75,7 @@ export default function HomeScreen() {
         id: b.idNegocio,
         name: b.nombre,
         category: b.categoria ?? null,
-        logoUrl: b.urlLogo ?? null,
+        logoUrl: b.configuracion?.urlLogo ?? b.urlLogo ?? null,
         facebook: b.facebook ?? null,
         instagram: b.instagram ?? null,
         sitioWeb: b.sitioWeb ?? null,

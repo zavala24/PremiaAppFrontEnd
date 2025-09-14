@@ -73,6 +73,7 @@ export default function LoginScreen() {
 
     try {
       setLoading(true);
+            
       const result = await authService.login(digits, usePassword ? password : undefined);
       setLoading(false);
 

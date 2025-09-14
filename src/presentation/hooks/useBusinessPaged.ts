@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../infrastructure/http/api";
 
+export type ApiConfig = {
+  idConfiguracionNegocio: number;
+  urlLogo?: string | null;
+  porcentajeVentas?: number;
+  activo?: boolean;
+};
+
 // --- API contracts ---
 export type ApiBusiness = {
   idNegocio: number;
@@ -12,6 +19,7 @@ export type ApiBusiness = {
   sitioWeb?: string | null;
   direccion?: string | null;
   descripcion?: string | null;
+  configuracion?: ApiConfig | null;
 };
 
 type ApiPaged<T> = {
@@ -45,6 +53,8 @@ export function useBusinessesPaged(defaultPageSize = 10) {
       if (loading) return;
       setLoading(true);
       try {
+
+
         const res = await api.get<ApiEnvelope<ApiPaged<ApiBusiness>>>(
           "/Negocio/GetNegociosPaged",
           {
