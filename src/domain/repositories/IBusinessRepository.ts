@@ -1,6 +1,6 @@
 import { Paged } from "../dto/Pagination";
 import { ServiceResponse } from "../dto/ServiceResponse";
-import { Business } from "../entities/Bussiness";
+import { Business } from "../entities/Business";
 
 
 export type BusinessQuery = {
@@ -12,4 +12,5 @@ export type BusinessQuery = {
 
 export interface IBusinessRepository {
   getPaged(params: BusinessQuery): Promise<ServiceResponse<Paged<Business>>>;
+  getNegocioConfigByTelefono(phone: string): Promise<ServiceResponse<Business>>;
 }
