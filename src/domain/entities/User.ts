@@ -9,4 +9,5 @@ export interface User {
   apellidoPaterno?: string;
   apellidoMaterno?: string;
   email?:string;
+  puntosAcumulados?: number;
 }

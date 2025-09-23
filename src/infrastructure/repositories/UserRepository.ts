@@ -40,7 +40,8 @@ export class UserRepository implements IUserRepository {
 
     const resp = mapResponse(res);
     const body = res?.data ?? {};
-    // el backend manda { status, message, data: { ... } }
+
+
     const user: User | undefined = body?.data
       ? {
           nombre: body.data.nombre ?? "",
@@ -48,10 +49,11 @@ export class UserRepository implements IUserRepository {
           apellidoMaterno: body.data.apellidoMaterno ?? "",
           email: body.data.email ?? "",
           telefono: body.data.telefono ?? "",
-          role: body.role
+          role: body.role,
+          puntosAcumulados: body.data.puntosAcumulados
         }
       : undefined;
-
+          console.log("USER!!",user)
     return { resp, user };
   }
 

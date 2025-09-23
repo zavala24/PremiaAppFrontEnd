@@ -23,6 +23,14 @@ import { BusinessService } from "../application/services/BusinessService";
 import { BusinessRepository } from "../infrastructure/repositories/BusinessRepository";
 import { IBusinessService } from "../application/interfaces/IBusinessService";
 
+import { UserService } from "../application/services/UserServices";
+import { UserRepository } from "../infrastructure/repositories/UserRepository";
+import { IUserService } from "../application/interfaces/IUserServices";
+import { SellRepository } from "../infrastructure/repositories/SellRepository";
+import { SellService } from "../application/services/SellServices";
+import { ISellService } from "../application/interfaces/ISellService";
+import { InsertSellPayload } from "../domain/entities/Sell";
+
 const View = styled(RNView);
 const Text = styled(RNText);
 const TextInput = styled(RNTextInput);
@@ -34,17 +42,12 @@ const Image = styled(RNImage);
 
 // ==== Helpers ====
 const currency = (n: number) =>
-  new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(isNaN(n) ? 0 : n);
+  new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(
+    isNaN(n) ? 0 : n
+  );
 const onlyDigits = (s: string) => s.replace(/\D/g, "");
 
-// ==== Mocks SOLO para cliente y venta (tu negocio ya viene de la API) ====
-// (Puedes reemplazar estos dos por tus endpoints reales de cliente y venta)
-async function fetchCustomerByPhone(phone: string): Promise<{ name: string; balance: number }> {
-  await new Promise((r) => setTimeout(r, 600));
-  // simula que todos tienen 0 saldo excepto este
-  if (phone === "6441900765") return { name: "Cliente Paletita", balance: 10 };
-  return { name: "Cliente", balance: 0 };
-}
+// (mocks solo para transacción; el negocio ya viene de tu API)
 async function postTransaction(payload: {
   customerPhone: string;
   amount: number;
@@ -59,26 +62,25 @@ async function postTransaction(payload: {
 }
 
 export default function SellPointsScreen() {
-  const { user } = useAuth(); // ← usuario autenticado (de aquí obtenemos su teléfono)
-  const service: IBusinessService = new BusinessService(new BusinessRepository());
+  const { user } = useAuth(); // ← teléfono del usuario autenticado
+  const businessService: IBusinessService = new BusinessService(new BusinessRepository());
+  const userService: IUserService = new UserService(new UserRepository());
 
-  // ======== Estado del NEGOCIO (obtenido por teléfono del usuario autenticado) ========
+  // ======== Estado del NEGOCIO ========
   const [bizLoading, setBizLoading] = useState(true);
   const [bizError, setBizError] = useState<string | null>(null);
   const [business, setBusiness] = useState<Business | null>(null);
 
-  // variables derivadas (para usar al registrar la venta)
   const businessId = business?.id ?? 0;
   const configId = business?.configuracion?.id ?? null;
   const bizLogoUrl = business?.configuracion?.urlLogo ?? undefined;
 
-  // porcentaje en UI
   // Tu backend guarda "3" para 3% (no 0.03). Convertimos a factor.
   const rawPct = business?.configuracion?.porcentajeVentas ?? 0;
-  const pctFactor = rawPct >= 1 ? rawPct / 100 : rawPct; // defensivo
+  const pctFactor = rawPct >= 1 ? rawPct / 100 : rawPct;
 
-  // ======== Estado de CLIENTE y venta ========
-  const [phone, setPhone] = useState(""); // teléfono del CLIENTE
+  // ======== Estado de CLIENTE / Venta ========
+  const [phone, setPhone] = useState("");          // Teléfono del cliente
   const [amount, setAmount] = useState("");
   const [article, setArticle] = useState("");
   const [description, setDescription] = useState("");
@@ -86,11 +88,15 @@ export default function SellPointsScreen() {
   const [customerName, setCustomerName] = useState<string | null>(null);
   const [customerBalance, setCustomerBalance] = useState<number>(0);
 
-  const [wantsRedeem, setWantsRedeem] = useState(false);
+  const [userValid, setUserValid] = useState<boolean | null>(null); // ← estado de validación
   const [loadingLookup, setLoadingLookup] = useState(false);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
-  const [balance, setBalance] = useState<number>(0);
-  // ======== Cargar NEGOCIO al montar la pantalla ========
+  const [wantsRedeem, setWantsRedeem] = useState(false);
+
+  const repository = new SellRepository();
+  const sellService: ISellService = new SellService(repository);
+
+  // Cargar negocio por teléfono del usuario autenticado
   useEffect(() => {
     let mounted = true;
     const load = async () => {
@@ -100,7 +106,7 @@ export default function SellPointsScreen() {
           setBizLoading(false);
           return;
         }
-        const res = await service.getNegocioConfigByTelefono(user.telefono);
+        const res = await businessService.getNegocioConfigByTelefono(user.telefono);
         if (!mounted) return;
 
         if (res.status !== 200 || !res.data) {
@@ -123,77 +129,146 @@ export default function SellPointsScreen() {
     };
   }, [user?.telefono]);
 
-  // Monto como número + cálculos (aplicar saldo del cliente)
-  const amountNumber = useMemo(() => Number((amount || "0").replace(",", ".")) || 0, [amount]);
+  // Números / cálculos
+  const amountNumber = useMemo(
+    () => Number((amount || "0").replace(",", ".")) || 0,
+    [amount]
+  );
   const applied = wantsRedeem ? Math.min(customerBalance, amountNumber) : 0;
   const totalAfterRedeem = Math.max(0, amountNumber - applied);
-
-  // Puntos ganados = total pagado * porcentaje negocio
-  const earned = useMemo(() => totalAfterRedeem * pctFactor, [totalAfterRedeem, pctFactor]);
-
-  // ======== Consultar CLIENTE ========
+  // ======== Consultar CLIENTE por teléfono (repositorio real) ========
   const handleLookup = async () => {
     const p = onlyDigits(phone);
-    if (p.length < 10) return Alert.alert("Teléfono inválido", "Ingresa al menos 10 dígitos.");
+    if (p.length < 10) {
+      Alert.alert("Teléfono inválido", "Ingresa al menos 10 dígitos.");
+      return;
+    }
+
     try {
       setLoadingLookup(true);
-      const res = await fetchCustomerByPhone(p);
-      setCustomerName(res.name);
-      setCustomerBalance(res.balance);
-    } catch {
-      Alert.alert("Error", "No se pudo consultar al cliente.");
+      setUserValid(null);
+
+      // GET /users/by-phone o como lo tengas
+       const { resp, user: u } = await userService.getUserByPhone(p);
+
+      // Ajusta si tu ServiceResponse usa otras propiedades
+      if (resp.status === 201 ) {
+        setCustomerName(u.nombre ?? "Usuario");
+        setCustomerBalance(Number(u.puntosAcumulados ?? 0));
+        setUserValid(true);
+      } else {
+        setCustomerName(null);
+        setCustomerBalance(0);
+        setUserValid(false);
+      }
+    } catch (e: any) {
+      setCustomerName(null);
+      setCustomerBalance(0);
+      setUserValid(false);
+      Alert.alert("Error", e?.message || "No se pudo validar el usuario.");
     } finally {
       setLoadingLookup(false);
     }
   };
 
-  // ======== Confirmar venta (a futuro envía a tu API real) ========
-  const handleSubmit = async () => {
-    const p = onlyDigits(phone);
-    if (p.length < 10) return Alert.alert("Teléfono inválido", "Ingresa al menos 10 dígitos.");
-    if (!(amountNumber > 0)) return Alert.alert("Monto inválido", "El monto debe ser mayor a 0.");
-    if (!businessId) return Alert.alert("Negocio no disponible", "Vuelve a intentar más tarde.");
-
-    try {
-      setLoadingSubmit(true);
-      const res = await postTransaction({
-        customerPhone: p,
-        amount: amountNumber,
-        applied,
-        businessId,
-        configId,
-        article: article.trim() || undefined,
-        description: description.trim() || undefined,
-      });
-      if (res.ok) {
-        Alert.alert(
-          "Venta registrada",
-          `ID: ${res.id}\nPagado: ${currency(totalAfterRedeem)}\nGanados: ${currency(earned)}`
-        );
-        // reset mínimos
-        setAmount("");
-        setArticle("");
-        setDescription("");
-        setWantsRedeem(false);
-      } else {
-        Alert.alert("Error", "No se pudo registrar la venta.");
-      }
-    } catch {
-      Alert.alert("Error", "Falló el registro de la venta.");
-    } finally {
-      setLoadingSubmit(false);
-    }
+  // Limpiar el estado de validación al cambiar el teléfono
+  const onChangePhone = (v: string) => {
+    setPhone(v);
+    setUserValid(null);
   };
+
+  // Confirmar venta
+const handleSubmit = async () => {
+  if (userValid !== true) {
+    Alert.alert("Usuario no válido", "Valida el usuario antes de continuar.");
+    return;
+  }
+
+  const p = onlyDigits(phone);
+  if (p.length < 10) {
+    Alert.alert("Teléfono inválido", "Ingresa al menos 10 dígitos.");
+    return;
+  }
+
+  if (!(amountNumber > 0)) {
+    Alert.alert("Monto inválido", "El monto debe ser mayor a 0.");
+    return;
+  }
+
+  if (!businessId) {
+    Alert.alert("Negocio no disponible", "Vuelve a intentar más tarde.");
+    return;
+  }
+
+  try {
+    setLoadingSubmit(true);
+
+    const payload: InsertSellPayload = {
+      NegocioId: businessId,
+      TelefonoCliente: p,
+      CreadoPor: user?.telefono ?? "",           
+      Articulo: article.trim() || null,
+      Descripcion: description.trim() || null,
+      Monto: amountNumber,
+      PuntosAplicados: wantsRedeem,              
+      TotalCobrado: totalAfterRedeem,
+      SaldoAntes: customerBalance,
+      SaldoDespues: customerBalance - (wantsRedeem ? Math.min(customerBalance, amountNumber) : 0),
+    };
+
+    const { resp, result } = await sellService.insertSellByUserPhoneNumber(payload);
+
+    if (!resp.success) {
+      Alert.alert("Error", resp.message || "No se pudo registrar la venta.");
+      return;
+    }
+
+    // Éxito
+    Alert.alert(
+      "Venta registrada",
+      `Cobrado: ${currency(result?.totalCobrado ?? payload.TotalCobrado)}\nSaldo después: ${currency(result?.saldoDespues ?? payload.SaldoDespues)}`
+    );
+
+    // Si el backend regresa el nuevo saldo, úsalo para refrescar la UI
+    if (typeof result?.saldoDespues === "number") {
+      setCustomerBalance(result.saldoDespues);
+    }
+
+    // Limpiar formulario
+    setAmount("");
+    setArticle("");
+    setDescription("");
+    setWantsRedeem(false);
+  } catch (e: any) {
+    Alert.alert("Error", e?.message || "Falló el registro de la venta.");
+  } finally {
+    setLoadingSubmit(false);
+  }
+};
+
+
 
   // ======== Render ========
   return (
-    <KeyboardAvoidingView className="flex-1 bg-blue-600" behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView
+      className="flex-1 bg-blue-600"
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
       {/* Burbujas decorativas */}
-      <View pointerEvents="none" className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-blue-400/25" />
-      <View pointerEvents="none" className="absolute -bottom-28 -left-28 h-80 w-80 rounded-full bg-blue-800/25" />
+      <View
+        pointerEvents="none"
+        className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-blue-400/25"
+      />
+      <View
+        pointerEvents="none"
+        className="absolute -bottom-28 -left-28 h-80 w-80 rounded-full bg-blue-800/25"
+      />
 
       <Safe className="flex-1 px-4">
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingVertical: 12 }}>
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingVertical: 12 }}
+        >
           <View className="bg-white rounded-3xl p-6 border border-blue-100 shadow-2xl">
             {/* Header negocio */}
             {bizLoading ? (
@@ -203,37 +278,46 @@ export default function SellPointsScreen() {
               </View>
             ) : bizError ? (
               <View className="items-center py-4">
-                <MaterialCommunityIcons name="store-alert-outline" size={28} color="#EF4444" />
+                <MaterialCommunityIcons
+                  name="store-alert-outline"
+                  size={28}
+                  color="#EF4444"
+                />
                 <Text className="text-red-600 mt-2 text-center">{bizError}</Text>
               </View>
             ) : (
               <View className="items-center mb-4">
                 <View className="h-24 w-24 rounded-full bg-blue-50 border border-blue-100 overflow-hidden items-center justify-center mb-3">
                   {bizLogoUrl ? (
-                    <Image source={{ uri: bizLogoUrl }} className="h-full w-full" resizeMode="cover" />
+                    <Image
+                      source={{ uri: bizLogoUrl }}
+                      className="h-full w-full"
+                      resizeMode="cover"
+                    />
                   ) : (
-                    <MaterialCommunityIcons name="storefront-outline" size={38} color="#2563EB" />
+                    <MaterialCommunityIcons
+                      name="storefront-outline"
+                      size={38}
+                      color="#2563EB"
+                    />
                   )}
                 </View>
                 <Text className="text-lg font-extrabold text-blue-700">
                   {business?.name ?? "Mi negocio"}
                 </Text>
-                <Text className="text-gray-500 mt-1 text-center">
-                  {`Porcentaje de puntos por venta: ${(rawPct ?? 0).toString()}%`}
-                </Text>
-                {!!business?.direccion && (
-                  <Text className="text-gray-400 text-xs mt-1 text-center">{business.direccion}</Text>
-                )}
+
               </View>
             )}
 
             {/* Teléfono del CLIENTE */}
-            <Text className="text-gray-500 mb-2">Número de teléfono del cliente (obligatorio)</Text>
+            <Text className="text-gray-500 mb-2">
+              Número de teléfono del cliente (obligatorio)
+            </Text>
             <View className="flex-row items-center rounded-2xl border border-gray-300 bg-white px-4 py-3">
               <MaterialCommunityIcons name="phone" size={20} color="#6B7280" />
               <TextInput
                 value={phone}
-                onChangeText={setPhone}
+                onChangeText={onChangePhone}
                 placeholder="5512345678"
                 placeholderTextColor="#9CA3AF"
                 className="flex-1 ml-2 text-base text-gray-800"
@@ -242,18 +326,41 @@ export default function SellPointsScreen() {
               />
               <Pressable
                 onPress={handleLookup}
-                className={`ml-2 px-3 py-2 rounded-xl ${loadingLookup ? "bg-blue-200" : "bg-blue-600"}`}
+                className={`ml-2 px-3 py-2 rounded-xl ${
+                  loadingLookup ? "bg-blue-200" : "bg-blue-600"
+                }`}
                 disabled={loadingLookup || !!bizError || bizLoading}
               >
-                {loadingLookup ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-semibold">Consultar</Text>}
+                {loadingLookup ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text className="text-white font-semibold">Consultar</Text>
+                )}
               </Pressable>
             </View>
 
-            {customerName && (
+            {/* Estado de validación */}
+            {userValid !== null && (
+              <Text
+                className={`mt-2 ${
+                  userValid ? "text-green-600" : "text-red-600"
+                }`}
+              >
+                {userValid ? "Usuario válido" : "Usuario no válido"}
+              </Text>
+            )}
+
+            {/* Info breve del cliente */}
+            {customerName && userValid && (
               <View className="bg-blue-50 border border-blue-100 rounded-2xl p-3 mt-3">
-                <Text className="text-blue-900 font-semibold">{customerName}</Text>
+                <Text className="text-blue-900 font-semibold">
+                  {customerName}
+                </Text>
                 <Text className="text-blue-700/70 mt-1">
-                  Saldo disponible: <Text className="font-semibold">{currency(customerBalance)}</Text>
+                  Saldo disponible:{" "}
+                  <Text className="font-semibold">
+                    {currency(customerBalance)}
+                  </Text>
                 </Text>
               </View>
             )}
@@ -297,30 +404,46 @@ export default function SellPointsScreen() {
 
             {/* Switch aplicar saldo */}
             <View className="flex-row items-center justify-between mt-5">
-              <Text className="text-gray-900 font-semibold">Aplicar puntos disponibles</Text>
+              <Text className="text-gray-900 font-semibold">
+                Aplicar puntos disponibles
+              </Text>
               <Switch value={wantsRedeem} onValueChange={setWantsRedeem} />
             </View>
 
-            {/* Resumen */}
+            {/* Resumen (3 filas como pediste) */}
             <View className="bg-[#0b1220] border border-[#1e293b] rounded-2xl p-4 mt-5">
               <Row label="Monto" value={currency(amountNumber)} />
-              <Row label="Total puntos en dinero" value={currency(balance)} />
-              <Row label="Monto aplicado" value={currency(totalAfterRedeem)} strong />
+              <Row
+                label="Total puntos en dinero"
+                value={currency(customerBalance)}
+              />
+              <Row
+                label="Monto aplicado"
+                value={currency(totalAfterRedeem)}
+                strong
+              />
             </View>
 
             {/* Confirmar */}
             <Pressable
               onPress={handleSubmit}
-              disabled={loadingSubmit || bizLoading || !!bizError}
-              className={`mt-5 py-4 rounded-2xl items-center ${loadingSubmit ? "bg-blue-300" : "bg-green-500"}`}
+              disabled={
+                loadingSubmit || bizLoading || !!bizError || userValid !== true
+              }
+              className={`mt-5 py-4 rounded-2xl items-center ${
+                loadingSubmit || userValid !== true
+                  ? "bg-blue-300"
+                  : "bg-green-500"
+              }`}
             >
               {loadingSubmit ? (
                 <ActivityIndicator color="#0b1220" />
               ) : (
-                <Text className="text-[#0b1220] font-extrabold">Confirmar venta</Text>
+                <Text className="text-[#0b1220] font-extrabold">
+                  Confirmar venta
+                </Text>
               )}
             </Pressable>
-
           </View>
         </ScrollView>
       </Safe>
@@ -328,11 +451,21 @@ export default function SellPointsScreen() {
   );
 }
 
-function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+function Row({
+  label,
+  value,
+  strong,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+}) {
   return (
     <View className="flex-row justify-between mt-2">
       <Text className="text-gray-300">{label}</Text>
-      <Text className={`text-white ${strong ? "font-extrabold" : "font-semibold"}`}>{value}</Text>
+      <Text className={`text-white ${strong ? "font-extrabold" : "font-semibold"}`}>
+        {value}
+      </Text>
     </View>
   );
 }
