@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+// src/screens/CreateUserScreen.tsx
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View as RNView,
   Text as RNText,
@@ -12,9 +13,16 @@ import {
 import { styled } from "nativewind";
 import Toast from "react-native-toast-message";
 
+import { useAuth } from "../presentation/context/AuthContext";
+
 import { UserRepository } from "../infrastructure/repositories/UserRepository";
 import { UserService } from "../application/services/UserServices";
 import { IUserService } from "../application/interfaces/IUserServices";
+
+import { Business } from "../domain/entities/Business";
+import { BusinessRepository } from "../infrastructure/repositories/BusinessRepository";
+import { BusinessService } from "../application/services/BusinessService";
+import { IBusinessService } from "../application/interfaces/IBusinessService";
 
 const View = styled(RNView);
 const Text = styled(RNText);
@@ -23,13 +31,54 @@ const Pressable = styled(RNPressable);
 const KeyboardAvoidingView = styled(RNKeyboardAvoidingView);
 
 export default function CreateUserScreen() {
+  const { user } = useAuth();
+
+  // ===== infra/services =====
+  const userRepository = new UserRepository();
+  const userService: IUserService = new UserService(userRepository);
+
+  const businessRepository = new BusinessRepository();
+  const businessService: IBusinessService = new BusinessService(businessRepository);
+
+  // ===== negocio actual (por teléfono del usuario logueado) =====
+  const [bizLoading, setBizLoading] = useState(true);
+  const [bizError, setBizError] = useState<string | null>(null);
+  const [business, setBusiness] = useState<Business | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        if (!user?.telefono) {
+          setBizError("No se encontró el teléfono del usuario autenticado.");
+          return;
+        }
+        const res = await businessService.getNegocioConfigByTelefono(user.telefono);
+        if (!mounted) return;
+
+        if (res.status !== 200 || !res.data) {
+          setBizError(res.message || "No fue posible obtener el negocio.");
+          return;
+        }
+        setBusiness(res.data);
+        setBizError(null);
+      } catch (e: any) {
+        if (!mounted) return;
+        setBizError(e?.message || "Error al cargar el negocio.");
+      } finally {
+        if (mounted) setBizLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [user?.telefono]);
+
+  // ===== formulario =====
   const [telefono, setTelefono] = useState("");
   const [touched, setTouched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState("");
-
-  const repository = new UserRepository();
-  const userService: IUserService = new UserService(repository);
 
   const digits = useMemo(() => telefono.replace(/\D/g, ""), [telefono]);
   const isValid = /^\d{10}$/.test(digits);
@@ -44,38 +93,62 @@ export default function CreateUserScreen() {
   const handleCrearUsuario = async () => {
     if (!isValid || loading) return;
 
+    // Debe existir negocio para poder mandar idNegocio
+    const businessId = business?.id ?? 0;
+    if (!businessId) {
+      Toast.show({
+        type: "error",
+        text1: "Negocio no disponible",
+        text2: bizError || "No se pudo determinar el negocio del usuario.",
+        position: "top",
+        visibilityTime: 2200,
+      });
+      return;
+    }
+
     try {
       setLoading(true);
-      await userService.createUser({
+
+      // Enviamos idNegocio junto con el resto del payload.
+      // Si tu interfaz User no lo tiene tipado aún, lo mandamos como any.
+      const payload: any = {
         nombre: "",
         telefono: digits,
         role: "User",
-      });
+        idNegocio: businessId,
+      };
+
+      await userService.createUser(payload);
+
       setLoading(false);
 
       Toast.show({
         type: "success",
         text1: "Usuario creado",
-        text2: `Teléfono: ${digits}`,
+        text2: `Teléfono: ${digits} • Negocio #${businessId}`,
         position: "top",
-        visibilityTime: 2000, // 2s
+        visibilityTime: 2000,
         autoHide: true,
       });
 
       setTelefono("");
       setTouched(false);
+      setServerError("");
     } catch (err: any) {
       setLoading(false);
-      setServerError(err?.message || "No se pudo crear el usuario");
+      const msg = err?.message || "No se pudo crear el usuario";
+      setServerError(msg);
       Toast.show({
         type: "error",
         text1: "Error al crear",
-        text2: err?.message || "Inténtalo de nuevo",
+        text2: msg,
         position: "top",
-         visibilityTime: 2000,
+        visibilityTime: 2200,
       });
     }
   };
+
+  const disabledBtn = !isValid || loading || bizLoading || !!bizError;
 
   return (
     <View className="flex-1 bg-blue-600">
@@ -95,10 +168,8 @@ export default function CreateUserScreen() {
         {/* Tarjeta */}
         <View className="w-full rounded-3xl bg-white shadow-2xl p-7">
           {/* Encabezado */}
-          <View className="items-center mb-6">
-            <Text className="text-3xl font-extrabold text-blue-700">
-              Crear usuario
-            </Text>
+          <View className="items-center mb-4">
+            <Text className="text-3xl font-extrabold text-blue-700">Crear usuario</Text>
             <Text className="text-gray-500 mt-1 text-center">
               Registra un número para comenzar
             </Text>
@@ -167,10 +238,10 @@ export default function CreateUserScreen() {
           {/* Botón */}
           <Pressable
             onPress={handleCrearUsuario}
-            disabled={!isValid || loading}
+            disabled={disabledBtn}
             className={[
-              "rounded-2xl py-4 items-center mt-4 shadow-lg shadow-blue-500/30",
-              !isValid || loading ? "bg-blue-400" : "bg-blue-700 active:opacity-90",
+              "rounded-2xl py-4 items-center mt-2 shadow-lg shadow-blue-500/30",
+              disabledBtn ? "bg-blue-400" : "bg-blue-700 active:opacity-90",
             ].join(" ")}
           >
             {loading ? (
@@ -181,9 +252,7 @@ export default function CreateUserScreen() {
                 </Text>
               </View>
             ) : (
-              <Text className="text-white font-semibold text-lg">
-                Crear Usuario
-              </Text>
+              <Text className="text-white font-semibold text-lg">Crear Usuario</Text>
             )}
           </Pressable>
         </View>

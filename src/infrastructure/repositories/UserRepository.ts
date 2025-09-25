@@ -53,7 +53,6 @@ export class UserRepository implements IUserRepository {
           puntosAcumulados: body.data.puntosAcumulados
         }
       : undefined;
-          console.log("USER!!",user)
     return { resp, user };
   }
 
