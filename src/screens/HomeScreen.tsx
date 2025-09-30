@@ -1,3 +1,4 @@
+// src/screens/HomeScreen.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View as RNView,
@@ -10,14 +11,22 @@ import {
   Image as RNImage,
   Platform,
   RefreshControl,
+  Alert,
 } from "react-native";
 import { styled } from "nativewind";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useBusinessesPaged, ApiBusiness } from "../presentation/hooks/useBusinessPaged";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/StackNavigator";
+import { useAuth } from "../presentation/context/AuthContext";
+
+import { useBusinessesPaged, ApiBusiness } from "../presentation/hooks/useBusinessPaged";
+import { BusinessService } from "../application/services/BusinessService";
+import { BusinessRepository } from "../infrastructure/repositories/BusinessRepository";
+import { IBusinessService } from "../application/interfaces/IBusinessService";
+import { UserService } from "../application/services/UserServices";
+import { UserRepository } from "../infrastructure/repositories/UserRepository";
 
 const View = styled(RNView);
 const Text = styled(RNText);
@@ -36,6 +45,7 @@ type UiBusiness = {
   sitioWeb?: string | null;
   direccion?: string | null;
   descripcion?: string | null;
+  activo?: boolean | null;
 };
 
 type TabKey = "all" | "mine";
@@ -44,31 +54,26 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth(); // { nombre, role, telefono }
+  const role = user?.role ?? null;
+  const canFollow = role === "User";
 
+  const businessService: IBusinessService = new BusinessService(new BusinessRepository());
   const {
-    items,          // ApiBusiness[]
-    loading,
-    refreshing,
-    initialLoading,
-    hasNext,
-    onEndReached,
-    onRefresh,
-    query,
-    setQuery,
+    items, loading, refreshing, initialLoading, hasNext,
+    onEndReached, onRefresh, query, setQuery,
   } = useBusinessesPaged(10);
 
-  // Tabs y “seguidos” (simulado hasta tener endpoint)
   const [tab, setTab] = useState<TabKey>("all");
-  const [following, setFollowing] = useState<Set<number>>(new Set<number>());
-
-  // state local de buscador (para mostrar lo que se escribe)
+  const [followMap, setFollowMap] = useState<Record<number, boolean>>({});
+  const [pending, setPending] = useState<Record<number, boolean>>({});
   const [localQuery, setLocalQuery] = useState(query ?? "");
+
   useEffect(() => {
     const t = setTimeout(() => setQuery(localQuery.trim()), 200);
     return () => clearTimeout(t);
   }, [localQuery, setQuery]);
 
-  // map API -> UI
   const uiItems: UiBusiness[] = useMemo(
     () =>
       (items as ApiBusiness[]).map((b) => ({
@@ -81,47 +86,85 @@ export default function HomeScreen() {
         sitioWeb: b.sitioWeb ?? null,
         direccion: b.direccion ?? null,
         descripcion: b.descripcion ?? null,
+        activo: (b as any)?.activo ?? (b as any)?.seguido ?? null,
       })),
     [items]
   );
 
-  // filtro “Mis negocios” en cliente (temporal)
-  const data: UiBusiness[] = useMemo(() => {
+  // hidratar followMap si viene “activo”
+  useEffect(() => {
+    const next = { ...followMap };
+    let changed = false;
+    for (const it of uiItems) {
+      if (typeof it.activo === "boolean" && next[it.id] !== it.activo) {
+        next[it.id] = it.activo;
+        changed = true;
+      }
+    }
+    if (changed) setFollowMap(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uiItems]);
+
+  // “Mis negocios” = solo activos
+  const data = useMemo(() => {
     if (tab === "all") return uiItems;
-    return uiItems.filter((b) => following.has(b.id));
-  }, [uiItems, tab, following]);
+    return uiItems.filter((b) => !!followMap[b.id]);
+  }, [uiItems, tab, followMap]);
 
   const listRef = useRef<FlatList<UiBusiness>>(null);
   useEffect(() => {
     listRef.current?.scrollToOffset({ offset: 0, animated: false });
   }, [tab, localQuery]);
 
-  const toggleFollow = (id: number) => {
-    setFollowing((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+  const notAllowed = () =>
+    Alert.alert("Acción no permitida", "Solo usuarios de tipo User pueden seguir negocios.");
+
+  const toggleFollow = async (businessId: number) => {
+    if (!canFollow) return notAllowed();
+    if (pending[businessId]) return;
+
+    const telefono = user?.telefono?.trim();
+    if (!telefono) {
+      Alert.alert("Usuario sin teléfono", "No fue posible obtener tu número de teléfono.");
+      return;
+    }
+
+    const nextActivo = !followMap[businessId];
+    setFollowMap((m) => ({ ...m, [businessId]: nextActivo })); // optimista
+    setPending((p) => ({ ...p, [businessId]: true }));
+
+    try {
+      const resp = await businessService.actualizarSeguirNegocioByTelefono(
+        businessId,
+        telefono,
+        nextActivo
+      );
+      if (resp.status < 200 || resp.status >= 300) {
+        throw new Error(resp.message || "No se pudo actualizar el seguimiento.");
+      }
+    } catch (err: any) {
+      // rollback
+      setFollowMap((m) => ({ ...m, [businessId]: !nextActivo }));
+      Alert.alert("Ups", err?.message || "No se pudo actualizar el seguimiento.");
+    } finally {
+      setPending((p) => ({ ...p, [businessId]: false }));
+    }
   };
 
   const gotoDetail = (b: UiBusiness) => {
     navigation.navigate("BusinessDetail", {
       business: {
-        id: b.id,
-        name: b.name,
-        category: b.category ?? null,
-        logoUrl: b.logoUrl ?? null,
-        facebook: b.facebook ?? null,
-        instagram: b.instagram ?? null,
-        sitioWeb: b.sitioWeb ?? null,
-        direccion: b.direccion ?? null,
-        descripcion: b.descripcion ?? null,
+        id: b.id, name: b.name, category: b.category ?? null, logoUrl: b.logoUrl ?? null,
+        facebook: b.facebook ?? null, instagram: b.instagram ?? null, sitioWeb: b.sitioWeb ?? null,
+        direccion: b.direccion ?? null, descripcion: b.descripcion ?? null,
       },
     });
   };
 
   const renderCard = ({ item }: { item: UiBusiness }) => {
-    const isFollowing = following.has(item.id);
+    const isFollowing = !!followMap[item.id];
+    const isBusy = !!pending[item.id];
+
     return (
       <View
         className="w-[48%] rounded-2xl mb-4 overflow-hidden border border-blue-100 bg-[#F9FAFB]"
@@ -139,15 +182,16 @@ export default function HomeScreen() {
 
           {!!item.category && (
             <View className="absolute left-2 top-2 bg-blue-100/95 px-2 py-1 rounded-full border border-blue-200">
-              <Text className="text-[11px] text-blue-800" numberOfLines={1}>
-                {item.category}
-              </Text>
+              <Text className="text-[11px] text-blue-800" numberOfLines={1}>{item.category}</Text>
             </View>
           )}
 
           <Pressable
-            onPress={() => toggleFollow(item.id)}
-            className="absolute right-2 top-2 h-8 w-8 items-center justify-center rounded-full bg-white/95 border border-blue-100 active:opacity-90"
+            onPress={() => (canFollow ? toggleFollow(item.id) : notAllowed())}
+            disabled={isBusy || !canFollow}
+            className={`absolute right-2 top-2 h-8 w-8 items-center justify-center rounded-full bg-white/95 border border-blue-100 ${
+              isBusy || !canFollow ? "opacity-50" : "active:opacity-90"
+            }`}
           >
             <MaterialCommunityIcons
               name={isFollowing ? "heart" : "heart-outline"}
@@ -159,14 +203,13 @@ export default function HomeScreen() {
 
         {/* Info */}
         <View className="p-3">
-          <Text className="font-semibold text-gray-900" numberOfLines={1}>
-            {item.name}
-          </Text>
+          <Text className="font-semibold text-gray-900" numberOfLines={1}>{item.name}</Text>
           <Text className="text-gray-500 text-xs mt-1" numberOfLines={1}>
-            {isFollowing ? "Siguiendo" : "Toca el corazón para seguir"}
+            {canFollow
+              ? (isFollowing ? "Siguiendo" : "Toca el corazón para seguir")
+              : "Tu rol no permite seguir"}
           </Text>
 
-          {/* Botón Ver (blanco, borde azul, texto azul) */}
           <Pressable
             onPress={() => gotoDetail(item)}
             className="self-start mt-3 px-4 py-2 rounded-xl border border-blue-600 bg-white active:opacity-90"
@@ -181,40 +224,20 @@ export default function HomeScreen() {
   return (
     <View className="flex-1 bg-blue-600">
       <StatusBar barStyle="light-content" />
-
-      {/* ✅ Burbujas exteriores (solo dos) */}
       <View pointerEvents="none" className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-blue-400/25" />
       <View pointerEvents="none" className="absolute -bottom-28 -left-28 h-80 w-80 rounded-full bg-blue-800/25" />
 
       <Safe
         className="flex-1 px-4 pb-2"
-        edges={["top", "left", "right"]}
+        edges={["top","left","right"]}
         style={{ paddingTop: insets.top + (Platform.OS === "android" ? 2 : 0) }}
       >
         <View className="flex-1 bg-white rounded-3xl p-6 border border-blue-100 shadow-2xl">
-          {/* Título */}
+          {/* Header */}
           <Text className="text-3xl font-extrabold text-blue-700 text-center">Negocios</Text>
           <Text className="text-gray-500 text-center mt-1 mb-5">
             Descubre negocios y promociones cerca de ti
           </Text>
-
-          {/* Buscador */}
-          <View className="rounded-2xl border border-gray-300 bg-white px-4 py-3 shadow-sm flex-row items-center">
-            <MaterialCommunityIcons name="magnify" size={20} color="#6B7280" />
-            <TextInput
-              value={localQuery}
-              onChangeText={setLocalQuery}
-              placeholder="Buscar negocios"
-              placeholderTextColor="#9CA3AF"
-              className="flex-1 ml-2 text-base text-gray-800"
-              returnKeyType="search"
-            />
-            {!!localQuery && (
-              <Pressable onPress={() => setLocalQuery("")} className="pl-2">
-                <MaterialCommunityIcons name="close-circle-outline" size={18} color="#9CA3AF" />
-              </Pressable>
-            )}
-          </View>
 
           {/* Tabs */}
           <View className="mt-4 flex-row items-end">
@@ -223,23 +246,25 @@ export default function HomeScreen() {
               { key: "mine" as const, label: "Mis negocios" },
             ] as const).map((t, idx) => {
               const active = tab === t.key;
+              const disabled = t.key === "mine" && !canFollow;
               return (
-                <Pressable key={t.key} onPress={() => setTab(t.key)} className={idx === 0 ? "mr-6" : ""}>
-                  <Text className={`text-base font-semibold ${active ? "text-blue-700" : "text-blue-700/50"}`}>
+                <Pressable
+                  key={t.key}
+                  onPress={() => (disabled ? notAllowed() : setTab(t.key))}
+                  disabled={disabled}
+                  className={idx === 0 ? "mr-6" : ""}
+                >
+                  <Text
+                    className={`text-base font-semibold ${
+                      active ? "text-blue-700" : "text-blue-700/50"
+                    } ${disabled ? "opacity-40" : ""}`}
+                  >
                     {t.label}
                   </Text>
                   <View className={`h-0.5 mt-1 rounded-full ${active ? "bg-blue-700" : "bg-transparent"}`} />
                 </Pressable>
               );
             })}
-            <View className="flex-1 items-end">
-              <Pressable className="h-9 px-3 items-center justify-center rounded-xl bg-white border border-blue-100 shadow-sm active:opacity-90">
-                <View className="flex-row items-center">
-                  <MaterialCommunityIcons name="tune-variant" size={18} color="#1F2937" />
-                  <Text className="ml-1 text-gray-700 text-sm">Filtros</Text>
-                </View>
-              </Pressable>
-            </View>
           </View>
 
           {/* Grid */}
@@ -260,20 +285,20 @@ export default function HomeScreen() {
                 showsVerticalScrollIndicator={false}
                 onEndReached={hasNext ? onEndReached : undefined}
                 onEndReachedThreshold={0.35}
-                refreshControl={
-                  <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1D4ED8" />
-                }
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1D4ED8" />}
                 ListEmptyComponent={
                   <View className="items-center mt-16">
                     <MaterialCommunityIcons name="text-search" size={36} color="#93C5FD" />
-                    <Text className="text-blue-800/70 mt-2">Sin resultados</Text>
+                    <Text className="text-blue-800/70 mt-2">
+                      {tab === "mine" && !canFollow
+                        ? "Tu rol no permite ver Mis negocios"
+                        : "Sin resultados"}
+                    </Text>
                   </View>
                 }
                 ListFooterComponent={
                   loading && hasNext ? (
-                    <View className="py-4">
-                      <ActivityIndicator color="#2563EB" />
-                    </View>
+                    <View className="py-4"><ActivityIndicator color="#2563EB" /></View>
                   ) : null
                 }
               />

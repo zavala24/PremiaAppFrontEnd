@@ -7,6 +7,7 @@ import {
 import { ServiceResponse } from "../../domain/dto/ServiceResponse";
 import { Paged } from "../../domain/dto/Pagination";
 import { Business } from "../../domain/entities/Business";
+import { NegocioFollowTelefonoDto } from "../../domain/entities/NegocioFollowUsuarioDto";
 
 // Envolturas genéricas del backend
 type ApiResponse<T> = { status: number; message: string; data: T | null };
@@ -75,4 +76,21 @@ export class BusinessRepository implements IBusinessRepository {
       data: data.data ? mapApiBusiness(data.data) : null,
     };
   }
+
+  async actualizarSeguirNegocioByTelefono(
+    dto: NegocioFollowTelefonoDto
+  ): Promise<ServiceResponse<Business>> {
+          console.log("KSHJK",dto)
+    const { data } = await api.post<ApiResponse<any>>(
+      "/Negocio/InsertUpdateSeguirNegocioByUsuario",
+      dto 
+    );
+
+    return {
+      status: data.status,
+      message: data.message,
+      data: data.data ? mapApiBusiness(data.data) : null,
+    };
+  }
+  
 }

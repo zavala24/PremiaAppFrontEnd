@@ -6,4 +6,9 @@ import { Business } from "../../domain/entities/Business";
 export interface IBusinessService {
   listPaged(params: BusinessQuery): Promise<ServiceResponse<Paged<Business>>>;
   getNegocioConfigByTelefono(phone: string): Promise<ServiceResponse<Business>>;
+    actualizarSeguirNegocioByTelefono(
+    businessId: number,
+    telefono: string,
+    activo: boolean
+  ): Promise<ServiceResponse<Business>>;
 }

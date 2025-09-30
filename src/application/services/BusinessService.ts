@@ -3,6 +3,7 @@ import { IBusinessRepository, BusinessQuery } from "../../domain/repositories/IB
 import { ServiceResponse } from "../../domain/dto/ServiceResponse";
 import { Paged } from "../../domain/dto/Pagination";
 import { Business } from "../../domain/entities/Business";
+import { NegocioFollowTelefonoDto } from "../../domain/entities/NegocioFollowUsuarioDto";
 
 export class BusinessService implements IBusinessService {
   constructor(private repo: IBusinessRepository) {}
@@ -16,5 +17,18 @@ export class BusinessService implements IBusinessService {
 
     getNegocioConfigByTelefono(phone: string): Promise<ServiceResponse<Business>> {
     return this.repo.getNegocioConfigByTelefono(phone);
+  }
+
+  async actualizarSeguirNegocioByTelefono(
+    businessId: number,
+    telefono: string,
+    activo: boolean
+  ): Promise<ServiceResponse<Business>> {
+    const dto: NegocioFollowTelefonoDto = {
+      IdNegocio: businessId,
+      Telefono: telefono,
+      Activo: activo,
+    };
+    return this.repo.actualizarSeguirNegocioByTelefono(dto);
   }
 }
