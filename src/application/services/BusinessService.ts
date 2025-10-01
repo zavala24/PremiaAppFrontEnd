@@ -31,4 +31,10 @@ export class BusinessService implements IBusinessService {
     };
     return this.repo.actualizarSeguirNegocioByTelefono(dto);
   }
+
+    getNegociosSeguidosByTelefono(
+    phone: string
+  ): Promise<ServiceResponse<Business[]>> {
+    return this.repo.getNegociosSeguidosByTelefono(phone);
+  }
 }

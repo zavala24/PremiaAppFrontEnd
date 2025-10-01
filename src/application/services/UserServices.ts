@@ -18,8 +18,12 @@ export class UserService implements IUserService {
     return this.userRepository.registerUser(user);
   }
 
-    getUserByPhone(phoneNumber: string) {
+  getUserByPhone(phoneNumber: string) {
     return this.userRepository.getUserByPhone(phoneNumber);
+  }
+
+  GetUserPuntosByPhoneNumber(phoneNumber: string, id: number) {
+    return this.userRepository.GetUserPuntosByPhoneNumber(phoneNumber, id);
   }
 
     updateUser(user: User): Promise<ServiceResponse> {

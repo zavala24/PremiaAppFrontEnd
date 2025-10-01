@@ -32,9 +32,33 @@ export class UserRepository implements IUserRepository {
     return mapResponse(res);
   }
 
-    async getUserByPhone(phoneNumber: string): Promise<{ resp: ServiceResponse; user?: User }> {
+      async getUserByPhone(phoneNumber: string): Promise<{ resp: ServiceResponse; user?: User }> {
     const res = await api.get("/User/GetUserByPhoneNumber", {
       params: { phoneNumber },
+      validateStatus: () => true,
+    });
+
+    const resp = mapResponse(res);
+    const body = res?.data ?? {};
+
+
+    const user: User | undefined = body?.data
+      ? {
+          nombre: body.data.nombre ?? "",
+          apellidoPaterno: body.data.apellidoPaterno ?? "",
+          apellidoMaterno: body.data.apellidoMaterno ?? "",
+          email: body.data.email ?? "",
+          telefono: body.data.telefono ?? "",
+          role: body.role,
+          puntosAcumulados: body.data.puntosAcumulados
+        }
+      : undefined;
+    return { resp, user };
+  }
+
+  async GetUserPuntosByPhoneNumber(phoneNumber: string, idNegocio: number): Promise<{ resp: ServiceResponse; user?: User }> {
+    const res = await api.get("/User/GetUserPuntosByPhoneNumber", {
+      params: { phoneNumber, idNegocio},
       validateStatus: () => true,
     });
 

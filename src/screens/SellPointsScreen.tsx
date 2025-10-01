@@ -218,7 +218,7 @@ export default function SellPointsScreen() {
 
       // Garantiza un mínimo de 800ms de "buscando..."
       const started = Date.now();
-      const { resp, user: u } = await userService.getUserByPhone(p);
+      const { resp, user: u } = await userService.GetUserPuntosByPhoneNumber(p, business.id);
       const elapsed = Date.now() - started;
       if (elapsed < MIN_LOOKUP_MS) await sleep(MIN_LOOKUP_MS - elapsed);
 

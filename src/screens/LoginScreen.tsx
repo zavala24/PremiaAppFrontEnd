@@ -224,27 +224,6 @@ export default function LoginScreen() {
           >
             <Text className="text-blue-700 font-semibold text-base">Regístrate</Text>
           </Pressable>
-
-          {/* Footer */}
-          <View className="mt-6 items-center">
-            <Text className="text-gray-400 text-xs text-center">
-              Al continuar aceptas nuestros{" "}
-              <Text
-                className="text-blue-700 underline"
-                onPress={() => Alert.alert("Términos", "Abrir términos")}
-              >
-                Términos
-              </Text>{" "}
-              y{" "}
-              <Text
-                className="text-blue-700 underline"
-                onPress={() => Alert.alert("Privacidad", "Abrir aviso")}
-              >
-                Privacidad
-              </Text>
-              .
-            </Text>
-          </View>
         </View>
       </KeyboardAvoidingView>
     </View>

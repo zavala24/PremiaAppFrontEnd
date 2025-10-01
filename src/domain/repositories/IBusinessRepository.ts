@@ -17,4 +17,8 @@ export interface IBusinessRepository {
     actualizarSeguirNegocioByTelefono(
     dto: NegocioFollowTelefonoDto
   ): Promise<ServiceResponse<Business>>;
+
+    getNegociosSeguidosByTelefono(
+    phone: string
+  ): Promise<ServiceResponse<Business[]>>;
 }

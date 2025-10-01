@@ -39,6 +39,7 @@ const mapApiBusiness = (n: any): Business => ({
         activo: !!n.configuracion.activo,
       }
     : null,
+    puntosAcumulados: n.puntosAcumulados ?? n.PuntosAcumulados
 });
 
 export class BusinessRepository implements IBusinessRepository {
@@ -80,7 +81,6 @@ export class BusinessRepository implements IBusinessRepository {
   async actualizarSeguirNegocioByTelefono(
     dto: NegocioFollowTelefonoDto
   ): Promise<ServiceResponse<Business>> {
-          console.log("KSHJK",dto)
     const { data } = await api.post<ApiResponse<any>>(
       "/Negocio/InsertUpdateSeguirNegocioByUsuario",
       dto 
@@ -90,6 +90,21 @@ export class BusinessRepository implements IBusinessRepository {
       status: data.status,
       message: data.message,
       data: data.data ? mapApiBusiness(data.data) : null,
+    };
+  }
+
+    async getNegociosSeguidosByTelefono(phone: string): Promise<ServiceResponse<Business[]>> {
+    const { data } = await api.get<ApiResponse<any>>(
+      "/Negocio/GetNegociosSeguidosByTelefono",
+      { params: { telefono: phone } }
+    );
+    console.log("DATAAAAA",data.data)
+    const raw = data.data;
+    const arr: any[] = Array.isArray(raw) ? raw : raw?.items ?? [];
+    return {
+      status: data.status,
+      message: data.message,
+      data: arr.map(mapApiBusiness),
     };
   }
   

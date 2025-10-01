@@ -1,7 +1,6 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import HomeScreen from "../screens/HomeScreen";
-import PointsScreen from "../screens/PointsScreen";
 import ConfigurationScreen from "../screens/ConfigurationScreen";
 import CreateUserScreen from "../screens/CreateUserScreen";
 import LogoutScreen from "../screens/LogoutScreen";
@@ -74,8 +73,6 @@ export default function TabNavigator() {
         />
       )}
 
-      {/* 3) Resto de tabs */}
-      <Tab.Screen name="Points" component={PointsScreen} options={{ title: "Puntos" }} />
       <Tab.Screen name="Configuration" component={ConfigurationScreen} options={{ title: "Configuración" }} />
 
       {/* 4) Crear Usuario solo para admin/superadmin */}

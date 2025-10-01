@@ -11,4 +11,8 @@ export interface IBusinessService {
     telefono: string,
     activo: boolean
   ): Promise<ServiceResponse<Business>>;
+
+    getNegociosSeguidosByTelefono(
+    phone: string
+  ): Promise<ServiceResponse<Business[]>>;
 }

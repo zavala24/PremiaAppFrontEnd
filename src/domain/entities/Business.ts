@@ -14,6 +14,6 @@ export interface Business {
   sitioWeb?: string | null;
   direccion?: string | null;
   descripcion?: string | null;
-
+  puntosAcumulados?: number | null;
   configuracion?: BusinessConfig | null;
 }
