@@ -32,7 +32,7 @@ export class UserRepository implements IUserRepository {
     return mapResponse(res);
   }
 
-      async getUserByPhone(phoneNumber: string): Promise<{ resp: ServiceResponse; user?: User }> {
+  async getUserByPhone(phoneNumber: string): Promise<{ resp: ServiceResponse; user?: User }> {
     const res = await api.get("/User/GetUserByPhoneNumber", {
       params: { phoneNumber },
       validateStatus: () => true,
@@ -82,6 +82,14 @@ export class UserRepository implements IUserRepository {
 
     async updateUser(payload: User): Promise<ServiceResponse> {
     const res = await api.put("/User/UpdateUser", payload, { validateStatus: () => true });
+    return mapResponse(res);
+  }
+
+    async getRoleByPhoneForLogin(phoneNumber: string): Promise<ServiceResponse> {
+    const res = await apiPublic.get("/User/GetRoleByPhoneForLogin", {
+      params: { phoneNumber },
+      validateStatus: () => true,
+    });
     return mapResponse(res);
   }
 }

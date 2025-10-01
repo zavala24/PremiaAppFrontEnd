@@ -1,11 +1,10 @@
 // src/screens/LoginScreen.tsx
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View as RNView,
   Text as RNText,
   TextInput as RNTextInput,
   Pressable as RNPressable,
-  Alert,
   ActivityIndicator,
   StatusBar,
   KeyboardAvoidingView as RNKeyboardAvoidingView,
@@ -22,16 +21,17 @@ import { AuthService } from "../application/services/AuthServices";
 import { AuthRepository } from "../infrastructure/repositories/AuthRepository";
 import { RootStackParamList } from "../navigation/StackNavigator";
 
+// ⬇️ IMPORTS para checar el rol por teléfono
+import { UserService } from "../application/services/UserServices";
+import { UserRepository } from "../infrastructure/repositories/UserRepository";
+
 const View = styled(RNView);
 const Text = styled(RNText);
 const TextInput = styled(RNTextInput);
 const Pressable = styled(RNPressable);
 const KeyboardAvoidingView = styled(RNKeyboardAvoidingView);
 
-type LoginScreenNavigationProp = NativeStackNavigationProp<
-  RootStackParamList,
-  "Login"
->;
+type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "Login">;
 
 export default function LoginScreen() {
   const navigation = useNavigation<LoginScreenNavigationProp>();
@@ -40,12 +40,60 @@ export default function LoginScreen() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // 👇 soporte UI para contraseña (solo Admin/Superadmin)
+  // Estado para rol (solo consultamos cuando hay 10 dígitos)
+  const [checkingRole, setCheckingRole] = useState(false);
+  const [roleMsg, setRoleMsg] = useState<string | null>(null); // "USER" | "ADMIN" | "SUPERADMIN" | "NO_USER" | "INCOMPLETO" ...
+
+  // UI contraseña (se muestra SOLO si ADMIN/SUPERADMIN)
   const [usePassword, setUsePassword] = useState(false);
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
 
   const authService = new AuthService(new AuthRepository());
+  const userService = new UserService(new UserRepository());
+
+  // Evita llamadas repetidas para el mismo número completo
+  const lastCheckedRef = useRef<string | null>(null);
+
+  // Solo llama al endpoint cuando hay exactamente 10 dígitos
+  useEffect(() => {
+    const digits = phoneNumber; // ya guardamos solo números
+    if (digits.length !== 10) {
+      // Reset cuando no hay 10 dígitos
+      setRoleMsg(null);
+      setUsePassword(false);
+      setPassword("");
+      lastCheckedRef.current = null;
+      setCheckingRole(false);
+      return;
+    }
+
+    // Si ya consultamos ese mismo número, no vuelvas a llamar
+    if (lastCheckedRef.current === digits) return;
+
+    // Marca este número como "en proceso"
+    lastCheckedRef.current = digits;
+    setCheckingRole(true);
+
+    (async () => {
+      try {
+        const resp = await userService.getRoleByPhoneForLogin(digits);
+        const msg = (resp.message || "").toUpperCase();
+        setRoleMsg(msg);
+
+        // Solo mostrar el toggle si es ADMIN/SUPERADMIN (por defecto apagado)
+        const canUsePassword = msg === "ADMIN" || msg === "SUPERADMIN";
+        setUsePassword(false); // no lo enciendas automáticamente
+        if (!canUsePassword) setPassword("");
+      } catch (e) {
+        setRoleMsg(null);
+        setUsePassword(false);
+        setPassword("");
+      } finally {
+        setCheckingRole(false);
+      }
+    })();
+  }, [phoneNumber, userService]);
 
   const handleLogin = async () => {
     const digits = phoneNumber.replace(/[^0-9]/g, "");
@@ -59,7 +107,18 @@ export default function LoginScreen() {
       });
       return;
     }
+    if (digits.length !== 10) {
+      Toast.show({
+        type: "error",
+        text1: "Número incompleto",
+        text2: "Debes ingresar 10 dígitos.",
+        position: "top",
+        visibilityTime: 2000,
+      });
+      return;
+    }
 
+    // Si está activado el uso de contraseña, debe haber password
     if (usePassword && !password.trim()) {
       Toast.show({
         type: "error",
@@ -73,7 +132,6 @@ export default function LoginScreen() {
 
     try {
       setLoading(true);
-            
       const result = await authService.login(digits, usePassword ? password : undefined);
       setLoading(false);
 
@@ -100,6 +158,8 @@ export default function LoginScreen() {
     }
   };
 
+  const canShowPasswordToggle = roleMsg === "ADMIN" || roleMsg === "SUPERADMIN";
+
   return (
     <View className="flex-1 bg-blue-600">
       <StatusBar barStyle="light-content" />
@@ -112,9 +172,9 @@ export default function LoginScreen() {
         className="flex-1 justify-center px-6"
         keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
       >
-        {/* Tarjeta más blanca y limpia */}
+        {/* Tarjeta */}
         <View className="w-full rounded-3xl bg-white shadow-2xl p-7">
-          {/* Encabezado limpio */}
+          {/* Encabezado */}
           <View className="items-center mb-6">
             <Text className="text-3xl font-extrabold text-blue-700">Bienvenido</Text>
             <Text className="text-gray-500 mt-1 text-center">
@@ -138,32 +198,41 @@ export default function LoginScreen() {
                 accessibilityLabel="Número de teléfono"
                 returnKeyType={usePassword ? "next" : "done"}
               />
+
+              {/* Loader pequeño mientras se valida rol (sólo cuando hay 10 dígitos) */}
+              {checkingRole && phoneNumber.length === 10 && (
+                <ActivityIndicator size="small" color="#1D4ED8" />
+              )}
             </View>
-            <Text className="text-gray-400 text-xs mt-2">
-              Solo números (10 dígitos).
-            </Text>
+            <Text className="text-gray-400 text-xs mt-2">Solo números (10 dígitos).</Text>
           </View>
 
-          {/* Toggle: Usar contraseña (solo Admin/Superadmin) */}
-          <Pressable
-            onPress={() => setUsePassword((v) => !v)}
-            className={`flex-row items-center justify-center rounded-2xl border ${
-              usePassword ? "border-blue-600 bg-blue-50" : "border-blue-100 bg-white"
-            } px-4 py-3 active:opacity-90`}
-          >
-            <MaterialCommunityIcons
-              name={usePassword ? "lock" : "lock-open-variant-outline"}
-              size={18}
-              color={usePassword ? "#1D4ED8" : "#1F2937"}
-            />
-            <Text className={`ml-2 font-semibold ${usePassword ? "text-blue-700" : "text-gray-700"}`}>
-              Usar contraseña
-            </Text>
-            <Text className="ml-2 text-[12px] text-gray-500">(solo Admin/Superadmin)</Text>
-          </Pressable>
+          {/* Toggle: Usar contraseña (solo si es ADMIN/SUPERADMIN) */}
+          {canShowPasswordToggle && (
+            <Pressable
+              onPress={() => setUsePassword((v) => !v)}
+              className={`flex-row items-center justify-center rounded-2xl border ${
+                usePassword ? "border-blue-600 bg-blue-50" : "border-blue-100 bg-white"
+              } px-4 py-3 active:opacity-90`}
+            >
+              <MaterialCommunityIcons
+                name={usePassword ? "lock" : "lock-open-variant-outline"}
+                size={18}
+                color={usePassword ? "#1D4ED8" : "#1F2937"}
+              />
+              <Text
+                className={`ml-2 font-semibold ${
+                  usePassword ? "text-blue-700" : "text-gray-700"
+                }`}
+              >
+                Usar contraseña
+              </Text>
+              <Text className="ml-2 text-[12px] text-gray-500">(solo Admin/Superadmin)</Text>
+            </Pressable>
+          )}
 
           {/* Campo contraseña (visible solo si toggle activo) */}
-          {usePassword && (
+          {canShowPasswordToggle && usePassword && (
             <View className="mt-4 mb-1">
               <View className="flex-row items-center rounded-2xl border border-gray-200 bg-[#F9FAFB] px-4 py-3 shadow-sm">
                 <MaterialCommunityIcons name="lock-outline" size={18} color="#6B7280" />
@@ -184,9 +253,6 @@ export default function LoginScreen() {
                   />
                 </Pressable>
               </View>
-              <Text className="text-gray-400 text-xs mt-2">
-                Los usuarios normales no necesitan contraseña.
-              </Text>
             </View>
           )}
 
@@ -201,9 +267,7 @@ export default function LoginScreen() {
             {loading ? (
               <View className="flex-row items-center">
                 <ActivityIndicator size="small" color="#fff" />
-                <Text className="text-white font-semibold text-base ml-3">
-                  Iniciando…
-                </Text>
+                <Text className="text-white font-semibold text-base ml-3">Iniciando…</Text>
               </View>
             ) : (
               <Text className="text-white font-semibold text-lg">Iniciar sesión</Text>

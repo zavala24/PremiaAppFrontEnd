@@ -98,7 +98,7 @@ export class BusinessRepository implements IBusinessRepository {
       "/Negocio/GetNegociosSeguidosByTelefono",
       { params: { telefono: phone } }
     );
-    console.log("DATAAAAA",data.data)
+
     const raw = data.data;
     const arr: any[] = Array.isArray(raw) ? raw : raw?.items ?? [];
     return {
