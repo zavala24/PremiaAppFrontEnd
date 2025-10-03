@@ -40,7 +40,7 @@ export default function CreateUserScreen() {
   const businessRepository = new BusinessRepository();
   const businessService: IBusinessService = new BusinessService(businessRepository);
 
-  // ===== negocio actual (por teléfono del usuario logueado) =====
+  // ===== negocio actual =====
   const [bizLoading, setBizLoading] = useState(true);
   const [bizError, setBizError] = useState<string | null>(null);
   const [business, setBusiness] = useState<Business | null>(null);
@@ -85,7 +85,12 @@ export default function CreateUserScreen() {
   const remaining = 10 - digits.length;
 
   const handleChange = (text: string) => {
-    setTelefono(text.replace(/\D/g, ""));
+    // Solo números y tope 10; ignora extras para evitar parpadeos.
+    setTelefono((prev) => {
+      const cleaned = text.replace(/\D/g, "");
+      if (cleaned.length <= 10) return cleaned;
+      return prev;
+    });
     setTouched(true);
     setServerError("");
   };
@@ -93,7 +98,6 @@ export default function CreateUserScreen() {
   const handleCrearUsuario = async () => {
     if (!isValid || loading) return;
 
-    // Debe existir negocio para poder mandar idNegocio
     const businessId = business?.id ?? 0;
     if (!businessId) {
       Toast.show({
@@ -109,8 +113,6 @@ export default function CreateUserScreen() {
     try {
       setLoading(true);
 
-      // Enviamos idNegocio junto con el resto del payload.
-      // Si tu interfaz User no lo tiene tipado aún, lo mandamos como any.
       const payload: any = {
         nombre: "",
         telefono: digits,
@@ -171,7 +173,7 @@ export default function CreateUserScreen() {
           <View className="items-center mb-4">
             <Text className="text-3xl font-extrabold text-blue-700">Crear usuario</Text>
             <Text className="text-gray-500 mt-1 text-center">
-              Registra un número para comenzar
+              Registra un número para registrar
             </Text>
           </View>
 
@@ -188,18 +190,29 @@ export default function CreateUserScreen() {
               ].join(" ")}
             >
               <Text className="text-gray-500 mr-2">📞</Text>
+
               <TextInput
                 value={digits}
                 onChangeText={handleChange}
                 maxLength={10}
-                keyboardType="phone-pad"
-                placeholder="Número de teléfono"
+                keyboardType="number-pad"
+                inputMode="numeric"
+                textContentType="telephoneNumber"
+                autoComplete="tel"
+                autoCorrect={false}
+                placeholder="Teléfono"
                 placeholderTextColor="#9CA3AF"
-                className="flex-1 text-base text-gray-800"
-                accessible
-                accessibilityLabel="Número de teléfono (10 dígitos)"
+                className="flex-1 text-base text-gray-800 mr-2"
+                // Centrado vertical del placeholder/valor en iOS y Android
+                style={{
+                  paddingVertical: 0,
+                  ...(Platform.OS === "android"
+                    ? { textAlignVertical: "center" as const }
+                    : null),
+                }}
                 returnKeyType="done"
               />
+
               <Text
                 className={[
                   "ml-2 text-xs font-semibold",
@@ -252,7 +265,7 @@ export default function CreateUserScreen() {
                 </Text>
               </View>
             ) : (
-              <Text className="text-white font-semibold text-lg">Crear Usuario</Text>
+              <Text className="text-white font-semibold text-lg">Crear</Text>
             )}
           </Pressable>
         </View>

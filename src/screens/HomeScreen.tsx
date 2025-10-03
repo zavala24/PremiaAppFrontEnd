@@ -12,6 +12,7 @@ import {
   Platform,
   RefreshControl,
   Alert,
+  useWindowDimensions,
 } from "react-native";
 import { styled } from "nativewind";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -49,18 +50,25 @@ type UiBusiness = {
 type TabKey = "all" | "mine";
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
+// ⬇️ Formato exacto a 2 decimales, sin redondeo a entero
 const currency = (n?: number | null) =>
-  new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(
-    typeof n === "number" ? n : 0
-  );
+  new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(typeof n === "number" ? n : 0);
 
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { width } = useWindowDimensions();
 
-  // Ahora cualquiera (sin importar el rol) puede seguir negocios.
-  // Usamos el teléfono para asociar el follow.
+  // Columnas responsivas
+  const columns = width >= 768 ? 3 : width >= 360 ? 2 : 1;
+  const isMultiCol = columns > 1;
+
+  const { user } = useAuth();
   const telefono = user?.telefono?.trim() ?? "";
   const canFollow = !!telefono;
 
@@ -105,13 +113,14 @@ export default function HomeScreen() {
   const [pointsByBiz, setPointsByBiz] = useState<Record<number, number>>({});
 
   const fetchMyBusinesses = async () => {
-    if (!canFollow) return; // requiere teléfono para poder consultar
+    if (!canFollow) return;
     setMyLoading(true);
     try {
       const { status, data, message } =
         await businessService.getNegociosSeguidosByTelefono(telefono);
 
-      if (status < 200 || status >= 300) throw new Error(message || "No se pudieron obtener tus negocios.");
+      if (status < 200 || status >= 300)
+        throw new Error(message || "No se pudieron obtener tus negocios.");
 
       const ui = (data ?? []).map((b) => ({
         id: b.id,
@@ -153,9 +162,15 @@ export default function HomeScreen() {
   const refreshMine = async () => {
     if (!canFollow) return;
     setMyRefreshing(true);
-    try { await fetchMyBusinesses(); } finally { setMyRefreshing(false); }
+    try {
+      await fetchMyBusinesses();
+    } finally {
+      setMyRefreshing(false);
+    }
   };
-  const refreshAll = async () => { await Promise.all([onRefresh(), fetchMyBusinesses()]); };
+  const refreshAll = async () => {
+    await Promise.all([onRefresh(), fetchMyBusinesses()]);
+  };
 
   // ======= Buscador =======
   const [localQuery, setLocalQuery] = useState(query ?? "");
@@ -168,7 +183,10 @@ export default function HomeScreen() {
   const [pending, setPending] = useState<Record<number, boolean>>({});
   const toggleFollow = async (businessId: number) => {
     if (!canFollow) {
-      Alert.alert("Acción no permitida", "Inicia sesión y agrega tu teléfono para seguir negocios.");
+      Alert.alert(
+        "Acción no permitida",
+        "Inicia sesión y agrega tu teléfono para seguir negocios."
+      );
       return;
     }
     if (pending[businessId]) return;
@@ -177,24 +195,47 @@ export default function HomeScreen() {
 
     // UI optimista
     setPending((p) => ({ ...p, [businessId]: true }));
-    setFollowSet((s) => { const next = new Set(s); willFollow ? next.add(businessId) : next.delete(businessId); return next; });
-    if (willFollow) setPointsByBiz((m) => ({ ...m, [businessId]: m[businessId] ?? 0 }));
-    else setPointsByBiz((m) => { const { [businessId]: _, ...rest } = m; return rest; });
+    setFollowSet((s) => {
+      const next = new Set(s);
+      willFollow ? next.add(businessId) : next.delete(businessId);
+      return next;
+    });
+    if (willFollow)
+      setPointsByBiz((m) => ({ ...m, [businessId]: m[businessId] ?? 0 }));
+    else
+      setPointsByBiz((m) => {
+        const { [businessId]: _, ...rest } = m;
+        return rest;
+      });
 
     try {
-      const resp = await businessService.actualizarSeguirNegocioByTelefono(businessId, telefono, willFollow);
-      if (resp.status < 200 || resp.status >= 300) throw new Error(resp.message || "No se pudo actualizar el seguimiento.");
+      const resp = await businessService.actualizarSeguirNegocioByTelefono(
+        businessId,
+        telefono,
+        willFollow
+      );
+      if (resp.status < 200 || resp.status >= 300)
+        throw new Error(resp.message || "No se pudo actualizar el seguimiento.");
 
       if (willFollow) {
         const found = uiAll.find((x) => x.id === businessId);
-        if (found && !myItems.some((x) => x.id === businessId)) setMyItems((arr) => [{ ...found, puntosAcumulados: 0 }, ...arr]);
+        if (found && !myItems.some((x) => x.id === businessId))
+          setMyItems((arr) => [{ ...found, puntosAcumulados: 0 }, ...arr]);
       } else {
         setMyItems((arr) => arr.filter((x) => x.id !== businessId));
       }
     } catch (e: any) {
       // rollback
-      setFollowSet((s) => { const next = new Set(s); willFollow ? next.delete(businessId) : next.add(businessId); return next; });
-      if (willFollow) setPointsByBiz((m) => { const { [businessId]: _, ...rest } = m; return rest; });
+      setFollowSet((s) => {
+        const next = new Set(s);
+        willFollow ? next.delete(businessId) : next.add(businessId);
+        return next;
+      });
+      if (willFollow)
+        setPointsByBiz((m) => {
+          const { [businessId]: _, ...rest } = m;
+          return rest;
+        });
       Alert.alert("Ups", e?.message || "No se pudo actualizar el seguimiento.");
     } finally {
       setPending((p) => ({ ...p, [businessId]: false }));
@@ -203,7 +244,9 @@ export default function HomeScreen() {
 
   // ======= Helpers UI =======
   const listRef = useRef<FlatList<UiBusiness>>(null);
-  useEffect(() => { listRef.current?.scrollToOffset({ offset: 0, animated: false }); }, [tab, localQuery]);
+  useEffect(() => {
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [tab, localQuery]);
 
   const gotoDetail = (b: UiBusiness) => {
     navigation.navigate("BusinessDetail", {
@@ -235,12 +278,23 @@ export default function HomeScreen() {
             key={t.key}
             onPress={() =>
               disabled
-                ? Alert.alert("Solo para cuentas con teléfono", "Inicia sesión y agrega tu teléfono para ver tus negocios seguidos.")
+                ? Alert.alert(
+                    "Solo para cuentas con teléfono",
+                    "Inicia sesión y agrega tu teléfono para ver tus negocios seguidos."
+                  )
                 : setTab(t.key)
             }
-            className={`flex-1 py-2 rounded-xl items-center ${active ? "bg-white shadow-sm" : ""} ${disabled ? "opacity-40" : ""}`}
+            className={`flex-1 py-2 rounded-xl items-center ${
+              active ? "bg-white shadow-sm" : ""
+            } ${disabled ? "opacity-40" : ""}`}
           >
-            <Text className={`font-semibold ${active ? "text-blue-700" : "text-blue-600/70"}`}>{t.label}</Text>
+            <Text
+              className={`font-semibold ${
+                active ? "text-blue-700" : "text-blue-600/70"
+              }`}
+            >
+              {t.label}
+            </Text>
           </Pressable>
         );
       })}
@@ -251,17 +305,31 @@ export default function HomeScreen() {
   const BusinessCard = ({ item }: { item: UiBusiness }) => {
     const isFollowing = followSet.has(item.id);
     const isBusy = !!pending[item.id];
-    const puntos = isFollowing ? pointsByBiz[item.id] ?? item.puntosAcumulados ?? 0 : undefined;
+    const puntos = isFollowing
+      ? pointsByBiz[item.id] ?? item.puntosAcumulados ?? 0
+      : undefined;
 
     return (
-      <View className="w-[47%] rounded-2xl mb-3 overflow-hidden border border-blue-100 bg-white">
+      <View
+        className={`${
+          isMultiCol ? "w-[48%]" : "w-full"
+        } rounded-2xl mb-3 overflow-hidden border border-blue-100 bg-white`}
+      >
         {/* Imagen compacta */}
         <View className="h-28 bg-blue-50 relative">
           {item.logoUrl ? (
-            <Image source={{ uri: item.logoUrl }} className="h-full w-full" resizeMode="cover" />
+            <Image
+              source={{ uri: item.logoUrl }}
+              className="h-full w-full"
+              resizeMode="cover"
+            />
           ) : (
             <View className="flex-1 items-center justify-center">
-              <MaterialCommunityIcons name="storefront-outline" size={36} color="#2563EB" />
+              <MaterialCommunityIcons
+                name="storefront-outline"
+                size={36}
+                color="#2563EB"
+              />
             </View>
           )}
 
@@ -296,7 +364,6 @@ export default function HomeScreen() {
             {item.name}
           </Text>
 
-          {/* El subtítulo ahora cabe: 2 líneas, más chico */}
           {isFollowing ? (
             <Text className="text-blue-900/80 text-[11px] mt-1 leading-4" numberOfLines={2}>
               Tus puntos en este negocio
@@ -307,24 +374,29 @@ export default function HomeScreen() {
             </Text>
           )}
 
-          {/* Footer compacto */}
+          {/* Footer compacto — chip flexible + botón fijo */}
           <View className="flex-row items-center justify-between mt-2">
             {isFollowing ? (
-              <View className="px-2 py-1 rounded-lg bg-blue-50 border border-blue-200 flex-row items-center">
-                <MaterialCommunityIcons name="wallet-outline" size={13} color="#1D4ED8" />
-                <Text className="ml-1 text-[11px] font-extrabold text-blue-700">
+              <View className="flex-1 min-w-0 max-w-[66%] px-2 py-1 rounded-lg bg-blue-50 border border-blue-200 flex-row items-center">
+                <MaterialCommunityIcons name="wallet-outline" size={12} color="#1D4ED8" />
+                <Text
+                  className="ml-1 text-[11px] font-extrabold text-blue-700"
+                  numberOfLines={1}
+                >
                   {currency(puntos)}
                 </Text>
               </View>
             ) : (
-              <View className="h-[26px]" />
+              <View className="h-[26px] flex-1" />
             )}
 
             <Pressable
               onPress={() => gotoDetail(item)}
-              className="px-3 py-[6px] rounded-lg bg-white border border-blue-600"
+              className="h-8 px-3 rounded-lg bg-white border border-blue-600 items-center justify-center ml-2 shrink-0"
             >
-              <Text className="text-blue-700 font-semibold text-[12px]">Ver</Text>
+              <Text className="text-blue-700 font-semibold text-[12px]" allowFontScaling={false}>
+                Ver
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -344,15 +416,16 @@ export default function HomeScreen() {
       <View pointerEvents="none" className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-blue-400/25" />
       <View pointerEvents="none" className="absolute -bottom-28 -left-28 h-80 w-80 rounded-full bg-blue-800/25" />
 
-      <Safe
-        className="flex-1 px-4 pb-2"
-        edges={["top", "left", "right"]}
-        style={{ paddingTop: insets.top + (Platform.OS === "android" ? 2 : 0) }}
-      >
+        <Safe
+          className="flex-1 px-4 pb-2"
+          edges={["top", "left", "right"]}   // ← ya maneja el paddingTop del notch
+        >
         <View className="flex-1 bg-white rounded-3xl p-6 border border-blue-100 shadow-2xl">
           {/* Header */}
           <Text className="text-3xl font-black text-blue-700 text-center tracking-tight">Negocios</Text>
-          <Text className="text-slate-500 text-center mt-1 mb-4">Descubre negocios y promociones cerca de ti</Text>
+          <Text className="text-slate-500 text-center mt-1 mb-4">
+            Descubre negocios y promociones cerca de ti
+          </Text>
 
           {/* Search redondeado */}
           <View className="rounded-full border border-blue-100 bg-white px-4 py-3 shadow-sm flex-row items-center">
@@ -362,7 +435,11 @@ export default function HomeScreen() {
               onChangeText={setLocalQuery}
               placeholder="Buscar negocios"
               placeholderTextColor="#9CA3AF"
-              className="flex-1 ml-2 text-base text-slate-800"
+              className="flex-1 ml-2 text-base text-slate-800 py-0"
+              style={{
+                paddingVertical: 0,
+                ...(Platform.OS === "android" ? { textAlignVertical: "center" as const } : null),
+              }}
               returnKeyType="search"
             />
             {!!localQuery && (
@@ -387,13 +464,14 @@ export default function HomeScreen() {
                 ref={listRef}
                 data={data}
                 keyExtractor={(it) => String(it.id)}
-                numColumns={2}
+                numColumns={columns}
                 renderItem={({ item }) => <BusinessCard item={item} />}
-                contentContainerStyle={{ paddingBottom: 8 }}
-                columnWrapperStyle={{ justifyContent: "space-between" }} // ← mejor separación
+                contentContainerStyle={{ paddingBottom: 8 + insets.bottom }}
+                columnWrapperStyle={isMultiCol ? { justifyContent: "space-between" } : undefined}
                 showsVerticalScrollIndicator={false}
                 onEndReached={isMine ? undefined : hasNext ? onEndReached : undefined}
                 onEndReachedThreshold={0.35}
+                keyboardShouldPersistTaps="handled"
                 refreshControl={
                   <RefreshControl
                     refreshing={isMine ? myRefreshing : refreshing}

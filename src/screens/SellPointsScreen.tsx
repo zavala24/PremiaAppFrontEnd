@@ -43,13 +43,25 @@ const KeyboardAvoidingView = styled(RNKeyboardAvoidingView);
 const ScrollView = styled(RNScrollView);
 const Image = styled(RNImage);
 
-// ==== Helpers ====
+/* ========================= Helpers ========================= */
 const currency = (n: number) =>
   new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(
     isNaN(n) ? 0 : n
   );
+
 const onlyDigits = (s: string) => s.replace(/\D/g, "");
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Sanitiza teléfono: sólo dígitos */
+const sanitizePhone = (raw: string) => onlyDigits(raw);
+
+/** Sanitiza monto: dígitos + un solo punto decimal (opcional) */
+const sanitizeAmount = (raw: string) => {
+  const cleaned = raw.replace(/,/g, ".").replace(/[^0-9.]/g, "");
+  const parts = cleaned.split(".");
+  if (parts.length <= 2) return cleaned;
+  return `${parts[0]}.${parts.slice(1).join("")}`; // colapsa puntos extra
+};
 
 // Prefijo del país para WhatsApp (MX por defecto)
 const DEFAULT_COUNTRY_CODE = "52";
@@ -115,8 +127,9 @@ type WaContext = {
   saldoDespues: number;
 };
 
-const MIN_LOOKUP_MS = 800; // <- tiempo mínimo para que se sienta la búsqueda
+const MIN_LOOKUP_MS = 800;
 
+/* ========================= Screen ========================= */
 export default function SellPointsScreen() {
   const { user } = useAuth();
   const businessService: IBusinessService = new BusinessService(new BusinessRepository());
@@ -208,7 +221,7 @@ export default function SellPointsScreen() {
   const handleLookup = async () => {
     const p = onlyDigits(phone);
     if (p.length < 10) {
-      Alert.alert("Teléfono inválido", "Ingresa al menos 10 dígitos.");
+      Alert.alert("Teléfono inválido", "Ingresa 10 dígitos.");
       return;
     }
 
@@ -216,9 +229,8 @@ export default function SellPointsScreen() {
       setLoadingLookup(true);
       setUserValid(null);
 
-      // Garantiza un mínimo de 800ms de "buscando..."
       const started = Date.now();
-      const { resp, user: u } = await userService.GetUserPuntosByPhoneNumber(p, business.id);
+      const { resp, user: u } = await userService.GetUserPuntosByPhoneNumber(p, business?.id ?? 0);
       const elapsed = Date.now() - started;
       if (elapsed < MIN_LOOKUP_MS) await sleep(MIN_LOOKUP_MS - elapsed);
 
@@ -241,9 +253,21 @@ export default function SellPointsScreen() {
     }
   };
 
+  /* ===== Inputs controlados ===== */
+
+  // TELÉFONO: solo dígitos y *bloqueo fuerte* a 10 (ignora extras)
   const onChangePhone = (v: string) => {
-    setPhone(v);
+    setPhone((prev) => {
+      const digits = sanitizePhone(v);
+      if (digits.length <= 10) return digits; // actualiza normal
+      return prev;                              // ignora cualquier extra
+    });
     setUserValid(null);
+  };
+
+  // MONTO: normaliza a 0-9 y un solo punto decimal
+  const onChangeAmount = (v: string) => {
+    setAmount(sanitizeAmount(v));
   };
 
   // ===== util: limpiar formulario =====
@@ -265,8 +289,8 @@ export default function SellPointsScreen() {
       return;
     }
     const p = onlyDigits(phone);
-    if (p.length < 10) {
-      Alert.alert("Teléfono inválido", "Ingresa al menos 10 dígitos.");
+    if (p.length !== 10) {
+      Alert.alert("Teléfono inválido", "Ingresa 10 dígitos.");
       return;
     }
     if (!(amountNumber > 0)) {
@@ -291,7 +315,8 @@ export default function SellPointsScreen() {
         PuntosAplicados: wantsRedeem,
         TotalCobrado: totalAfterRedeem,
         SaldoAntes: customerBalance,
-        SaldoDespues: customerBalance - (wantsRedeem ? Math.min(customerBalance, amountNumber) : 0),
+        SaldoDespues:
+          customerBalance - (wantsRedeem ? Math.min(customerBalance, amountNumber) : 0),
       };
 
       const { resp, result } = await sellService.insertSellByUserPhoneNumber(payload);
@@ -326,7 +351,6 @@ export default function SellPointsScreen() {
         autoHide: true,
       });
 
-      // Abrir el modal manualmente a los 2s (sin depender de onHide)
       if (waTimerRef.current) clearTimeout(waTimerRef.current);
       waTimerRef.current = setTimeout(() => setWaModalVisible(true), 2000);
     } catch (e: any) {
@@ -336,9 +360,12 @@ export default function SellPointsScreen() {
     }
   };
 
-  // ======== Render ========
+  /* ========================= Render ========================= */
   return (
-    <KeyboardAvoidingView className="flex-1 bg-blue-600" behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView
+      className="flex-1 bg-blue-600"
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
       {/* Burbujas decorativas */}
       <View pointerEvents="none" className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-blue-400/25" />
       <View pointerEvents="none" className="absolute -bottom-28 -left-28 h-80 w-80 rounded-full bg-blue-800/25" />
@@ -372,23 +399,36 @@ export default function SellPointsScreen() {
 
             {/* Teléfono del CLIENTE */}
             <Text className="text-gray-500 mb-2">Número de teléfono del cliente (obligatorio)</Text>
+
+            {/* ROW: icono + input + botón (espaciado y bloqueo numérico) */}
             <View className="flex-row items-center rounded-2xl border border-gray-300 bg-white px-4 py-3">
-              <MaterialCommunityIcons name="phone" size={20} color="#6B7280" />
+              <MaterialCommunityIcons name="phone" size={20} color="#6B7280" style={{ marginRight: 8 }} />
+
               <TextInput
                 value={phone}
-                onChangeText={onChangePhone}
+                onChangeText={onChangePhone}               // ← IGNORA extras >10
                 placeholder="5512345678"
                 placeholderTextColor="#9CA3AF"
-                className="flex-1 ml-2 text-base text-gray-800"
-                keyboardType="phone-pad"
-                maxLength={16}
+                className="flex-1 text-base text-gray-800 mr-3"
+                style={{
+                  paddingVertical: 0,                       // centra placeholder/valor en iOS
+                  ...(Platform.OS === "android" ? { textAlignVertical: "center" as const } : null),
+                }}
+                keyboardType="number-pad"
+                inputMode="numeric"
+                textContentType="telephoneNumber"
+                autoComplete="tel"
+                autoCorrect={false}
+                maxLength={10}                              // tope UI
+                returnKeyType="done"
               />
+
               <Pressable
                 onPress={handleLookup}
-                className={`ml-2 px-3 py-2 rounded-xl ${loadingLookup ? "bg-blue-200" : "bg-blue-600"}`}
+                className={`ml-3 px-4 py-2 rounded-xl ${loadingLookup ? "bg-blue-200" : "bg-blue-600"} shrink-0`}
                 disabled={loadingLookup || !!bizError || bizLoading}
               >
-                {loadingLookup ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-semibold">Consultar</Text>}
+                {loadingLookup ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-semibold">Buscar</Text>}
               </Pressable>
             </View>
 
@@ -396,9 +436,7 @@ export default function SellPointsScreen() {
             {loadingLookup && (
               <View className="flex-row items-center mt-2 px-3 py-2 rounded-xl bg-blue-50 border border-blue-100">
                 <MaterialCommunityIcons name="magnify" size={18} color="#2563EB" />
-                <Text className="ml-2 text-blue-800 font-medium">
-                  Buscando usuario{".".repeat(dots)}
-                </Text>
+                <Text className="ml-2 text-blue-800 font-medium">Buscando usuario{".".repeat(dots)}</Text>
               </View>
             )}
 
@@ -428,7 +466,16 @@ export default function SellPointsScreen() {
             {/* Monto */}
             <Text className="text-gray-500 mt-5 mb-2">Monto de la compra</Text>
             <View className="rounded-2xl border border-gray-300 bg-white px-4 py-3">
-              <TextInput value={amount} onChangeText={setAmount} placeholder="0.00" placeholderTextColor="#9CA3AF" className="text-base text-gray-800" keyboardType="decimal-pad" />
+              <TextInput
+                value={amount}
+                onChangeText={onChangeAmount}               // ← sanitiza monto
+                placeholder="0.00"
+                placeholderTextColor="#9CA3AF"
+                className="text-base text-gray-800"
+                keyboardType="decimal-pad"
+                inputMode="decimal"
+                autoCorrect={false}
+              />
             </View>
 
             {/* Descripción */}
@@ -462,7 +509,7 @@ export default function SellPointsScreen() {
         </ScrollView>
       </Safe>
 
-      {/* ===== Modal Bonito WhatsApp ===== */}
+      {/* ===== Modal WhatsApp ===== */}
       <RNModal visible={waModalVisible} animationType="fade" transparent onRequestClose={() => setWaModalVisible(false)}>
         <View className="flex-1 bg-black/60 items-center justify-center px-6">
           <View className="w-full max-w-md bg-white rounded-3xl p-5 border border-blue-100">
@@ -471,42 +518,31 @@ export default function SellPointsScreen() {
                 <MaterialCommunityIcons name="whatsapp" size={28} color="#16a34a" />
               </View>
               <Text className="text-xl font-extrabold text-slate-900 mt-3">Enviar por WhatsApp</Text>
-              <Text className="text-slate-600 mt-1 text-center">
-                ¿Quieres enviar el comprobante de la venta al cliente por WhatsApp?
-              </Text>
+              <Text className="text-slate-600 mt-1 text-center">¿Quieres enviar el comprobante de la venta al cliente por WhatsApp?</Text>
             </View>
 
             <View className="flex-row gap-3 mt-4">
-              <Pressable
-                className="flex-1 py-3 rounded-2xl border border-slate-300 items-center"
-                onPress={() => {
-                  setWaModalVisible(false);
-                  clearForm(); // ← limpia en NO
-                }}
-              >
+              <Pressable className="flex-1 py-3 rounded-2xl border border-slate-300 items-center" onPress={() => { setWaModalVisible(false); clearForm(); }}>
                 <Text className="text-slate-700 font-semibold">NO</Text>
               </Pressable>
 
-              <Pressable
-                className="flex-1 py-3 rounded-2xl items-center bg-green-500"
-                onPress={async () => {
-                  if (waContext) {
-                    const msg = buildWhatsAppMessage({
-                      businessName: waContext.businessName,
-                      customerName: waContext.customerName,
-                      article: waContext.article,
-                      amount: waContext.amount,
-                      applied: waContext.applied,
-                      total: waContext.total,
-                      saldoAntes: waContext.saldoAntes,
-                      saldoDespues: waContext.saldoDespues,
-                    });
-                    await sendWhatsApp(waContext.toPhone, msg);
-                  }
-                  setWaModalVisible(false);
-                  clearForm(); // ← limpia en SÍ
-                }}
-              >
+              <Pressable className="flex-1 py-3 rounded-2xl items-center bg-green-500" onPress={async () => {
+                if (waContext) {
+                  const msg = buildWhatsAppMessage({
+                    businessName: waContext.businessName,
+                    customerName: waContext.customerName,
+                    article: waContext.article,
+                    amount: waContext.amount,
+                    applied: waContext.applied,
+                    total: waContext.total,
+                    saldoAntes: waContext.saldoAntes,
+                    saldoDespues: waContext.saldoDespues,
+                  });
+                  await sendWhatsApp(waContext.toPhone, msg);
+                }
+                setWaModalVisible(false);
+                clearForm();
+              }}>
                 <Text className="text-white font-extrabold">SÍ</Text>
               </Pressable>
             </View>
