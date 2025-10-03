@@ -44,8 +44,7 @@ export default function LoginScreen() {
   const [checkingRole, setCheckingRole] = useState(false);
   const [roleMsg, setRoleMsg] = useState<string | null>(null); // "USER" | "ADMIN" | "SUPERADMIN" | "NO_USER" | "INCOMPLETO" ...
 
-  // UI contraseña (se muestra SOLO si ADMIN/SUPERADMIN)
-  const [usePassword, setUsePassword] = useState(false);
+  // Contraseña (solo visible si ADMIN/SUPERADMIN)
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
 
@@ -61,8 +60,8 @@ export default function LoginScreen() {
     if (digits.length !== 10) {
       // Reset cuando no hay 10 dígitos
       setRoleMsg(null);
-      setUsePassword(false);
       setPassword("");
+      setShowPass(false);
       lastCheckedRef.current = null;
       setCheckingRole(false);
       return;
@@ -80,15 +79,14 @@ export default function LoginScreen() {
         const resp = await userService.getRoleByPhoneForLogin(digits);
         const msg = (resp.message || "").toUpperCase();
         setRoleMsg(msg);
-
-        // Solo mostrar el toggle si es ADMIN/SUPERADMIN (por defecto apagado)
-        const canUsePassword = msg === "ADMIN" || msg === "SUPERADMIN";
-        setUsePassword(false); // no lo enciendas automáticamente
-        if (!canUsePassword) setPassword("");
+        if (msg !== "ADMIN" && msg !== "SUPERADMIN") {
+          setPassword("");
+          setShowPass(false);
+        }
       } catch (e) {
         setRoleMsg(null);
-        setUsePassword(false);
         setPassword("");
+        setShowPass(false);
       } finally {
         setCheckingRole(false);
       }
@@ -118,8 +116,10 @@ export default function LoginScreen() {
       return;
     }
 
-    // Si está activado el uso de contraseña, debe haber password
-    if (usePassword && !password.trim()) {
+    const isPrivileged = roleMsg === "ADMIN" || roleMsg === "SUPERADMIN";
+
+    // Si es admin/superadmin, la contraseña es requerida
+    if (isPrivileged && !password.trim()) {
       Toast.show({
         type: "error",
         text1: "Falta tu contraseña",
@@ -132,7 +132,7 @@ export default function LoginScreen() {
 
     try {
       setLoading(true);
-      const result = await authService.login(digits, usePassword ? password : undefined);
+      const result = await authService.login(digits, isPrivileged ? password : undefined);
       setLoading(false);
 
       if (result.success) {
@@ -158,7 +158,7 @@ export default function LoginScreen() {
     }
   };
 
-  const canShowPasswordToggle = roleMsg === "ADMIN" || roleMsg === "SUPERADMIN";
+  const showPasswordField = roleMsg === "ADMIN" || roleMsg === "SUPERADMIN";
 
   return (
     <View className="flex-1 bg-blue-600">
@@ -196,7 +196,7 @@ export default function LoginScreen() {
                 placeholderTextColor="#9CA3AF"
                 accessible
                 accessibilityLabel="Número de teléfono"
-                returnKeyType={usePassword ? "next" : "done"}
+                returnKeyType={showPasswordField ? "next" : "done"}
               />
 
               {/* Loader pequeño mientras se valida rol (sólo cuando hay 10 dígitos) */}
@@ -207,33 +207,9 @@ export default function LoginScreen() {
             <Text className="text-gray-400 text-xs mt-2">Solo números (10 dígitos).</Text>
           </View>
 
-          {/* Toggle: Usar contraseña (solo si es ADMIN/SUPERADMIN) */}
-          {canShowPasswordToggle && (
-            <Pressable
-              onPress={() => setUsePassword((v) => !v)}
-              className={`flex-row items-center justify-center rounded-2xl border ${
-                usePassword ? "border-blue-600 bg-blue-50" : "border-blue-100 bg-white"
-              } px-4 py-3 active:opacity-90`}
-            >
-              <MaterialCommunityIcons
-                name={usePassword ? "lock" : "lock-open-variant-outline"}
-                size={18}
-                color={usePassword ? "#1D4ED8" : "#1F2937"}
-              />
-              <Text
-                className={`ml-2 font-semibold ${
-                  usePassword ? "text-blue-700" : "text-gray-700"
-                }`}
-              >
-                Usar contraseña
-              </Text>
-              <Text className="ml-2 text-[12px] text-gray-500">(solo Admin/Superadmin)</Text>
-            </Pressable>
-          )}
-
-          {/* Campo contraseña (visible solo si toggle activo) */}
-          {canShowPasswordToggle && usePassword && (
-            <View className="mt-4 mb-1">
+          {/* Campo contraseña (visible SOLO si ADMIN/SUPERADMIN) */}
+          {showPasswordField && (
+            <View className="mt-2 mb-1">
               <View className="flex-row items-center rounded-2xl border border-gray-200 bg-[#F9FAFB] px-4 py-3 shadow-sm">
                 <MaterialCommunityIcons name="lock-outline" size={18} color="#6B7280" />
                 <TextInput
@@ -253,6 +229,7 @@ export default function LoginScreen() {
                   />
                 </Pressable>
               </View>
+              <Text className="text-gray-400 text-xs mt-2">(solo Admin/Superadmin)</Text>
             </View>
           )}
 

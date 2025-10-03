@@ -58,9 +58,11 @@ export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const role = user?.role ?? null;
-  const canFollow = role === "User";
+
+  // Ahora cualquiera (sin importar el rol) puede seguir negocios.
+  // Usamos el teléfono para asociar el follow.
   const telefono = user?.telefono?.trim() ?? "";
+  const canFollow = !!telefono;
 
   const businessService: IBusinessService = new BusinessService(new BusinessRepository());
 
@@ -103,7 +105,7 @@ export default function HomeScreen() {
   const [pointsByBiz, setPointsByBiz] = useState<Record<number, number>>({});
 
   const fetchMyBusinesses = async () => {
-    if (!canFollow || !telefono) return;
+    if (!canFollow) return; // requiere teléfono para poder consultar
     setMyLoading(true);
     try {
       const { status, data, message } =
@@ -142,14 +144,14 @@ export default function HomeScreen() {
   // Carga inicial seguidos
   const didLoadFollows = useRef(false);
   useEffect(() => {
-    if (!canFollow || !telefono) return;
+    if (!canFollow) return;
     if (didLoadFollows.current) return;
     didLoadFollows.current = true;
     fetchMyBusinesses();
   }, [canFollow, telefono]);
 
   const refreshMine = async () => {
-    if (!canFollow || !telefono) return;
+    if (!canFollow) return;
     setMyRefreshing(true);
     try { await fetchMyBusinesses(); } finally { setMyRefreshing(false); }
   };
@@ -165,8 +167,10 @@ export default function HomeScreen() {
   // ======= Toggle seguir =======
   const [pending, setPending] = useState<Record<number, boolean>>({});
   const toggleFollow = async (businessId: number) => {
-    if (!canFollow) { Alert.alert("Acción no permitida", "Solo usuarios de tipo User pueden seguir negocios."); return; }
-    if (!telefono) { Alert.alert("Usuario sin teléfono", "No fue posible obtener tu número de teléfono."); return; }
+    if (!canFollow) {
+      Alert.alert("Acción no permitida", "Inicia sesión y agrega tu teléfono para seguir negocios.");
+      return;
+    }
     if (pending[businessId]) return;
 
     const willFollow = !followSet.has(businessId);
@@ -231,7 +235,7 @@ export default function HomeScreen() {
             key={t.key}
             onPress={() =>
               disabled
-                ? Alert.alert("Solo para usuarios", "Inicia sesión como User para ver tus negocios seguidos.")
+                ? Alert.alert("Solo para cuentas con teléfono", "Inicia sesión y agrega tu teléfono para ver tus negocios seguidos.")
                 : setTab(t.key)
             }
             className={`flex-1 py-2 rounded-xl items-center ${active ? "bg-white shadow-sm" : ""} ${disabled ? "opacity-40" : ""}`}
