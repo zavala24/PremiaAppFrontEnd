@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "646225132299",
+    "project_id": "apppymespuntos",
+    "storage_bucket": "apppymespuntos.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:646225132299:android:62712380fb6b8289e2000e",
+        "android_client_info": {
+          "package_name": "com.apppymespuntos"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAUASMCBh8Iq6JQaw9ZZADGCOGEFPQ3dHg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
