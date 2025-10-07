@@ -1,4 +1,3 @@
-// src/screens/HomeScreen.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View as RNView,
@@ -19,6 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { RootStackParamList } from "../navigation/StackNavigator";
 import { useAuth } from "../presentation/context/AuthContext";
@@ -26,6 +26,15 @@ import { useBusinessesPaged, ApiBusiness } from "../presentation/hooks/useBusine
 import { BusinessService } from "../application/services/BusinessService";
 import { BusinessRepository } from "../infrastructure/repositories/BusinessRepository";
 import { IBusinessService } from "../application/interfaces/IBusinessService";
+
+// Firebase (API modular RNFirebase)
+import { getApp } from "@react-native-firebase/app";
+import { getMessaging, getToken, onTokenRefresh } from "@react-native-firebase/messaging";
+
+// Repo para enviar el token
+import { TokenRepository } from "../infrastructure/repositories/TokenRepository";
+import { InsertTokenPayload } from "../domain/repositories/ITokenRepository";
+
 
 const View = styled(RNView);
 const Text = styled(RNText);
@@ -50,7 +59,7 @@ type UiBusiness = {
 type TabKey = "all" | "mine";
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-// ⬇️ Formato exacto a 2 decimales, sin redondeo a entero
+// formato $ MXN
 const currency = (n?: number | null) =>
   new Intl.NumberFormat("es-MX", {
     style: "currency",
@@ -59,18 +68,79 @@ const currency = (n?: number | null) =>
     maximumFractionDigits: 2,
   }).format(typeof n === "number" ? n : 0);
 
+// =================== Hook local: sincroniza FCM token ===================
+const tokenKey = (tel: string) => `fcmToken:${tel}`;
+const onlyDigits = (s: string) => (s || "").replace(/\D+/g, "");
+
+function useDeviceTokenSync(telefono?: string) {
+  const repo = useMemo(() => new TokenRepository(), []);
+
+  useEffect(() => {
+    const numeroTelefono = onlyDigits(telefono ?? "");
+    if (!numeroTelefono) return;
+
+    let unsub: undefined | (() => void);
+
+    (async () => {
+      try {
+        const app = getApp();
+        const msg = getMessaging(app);
+
+        // token actual
+        const token = await getToken(msg);
+        const prev = await AsyncStorage.getItem(tokenKey(numeroTelefono));
+
+        if (token && token !== prev) {
+          const payload: InsertTokenPayload = {
+            numeroTelefono,
+            token,
+          };
+          const r = await repo.insertOrUpdateToken(payload);
+          if (r.status >= 200 && r.status < 300) {
+            await AsyncStorage.setItem(tokenKey(numeroTelefono), token);
+
+          } 
+        }
+
+        // refresh
+        unsub = onTokenRefresh(msg, async (newToken) => {
+          try {
+            const payload: InsertTokenPayload = {
+              numeroTelefono,
+              token: newToken,
+            };
+            const r = await repo.insertOrUpdateToken(payload);
+            if (r.status >= 200 && r.status < 300) {
+              await AsyncStorage.setItem(tokenKey(numeroTelefono), newToken);
+            } 
+          } catch (e) {
+          }
+        });
+      } catch (e) {
+      }
+    })();
+
+    return () => {
+      if (unsub) unsub();
+    };
+  }, [telefono, repo]);
+}
+// =======================================================================
+
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
-  // Columnas responsivas
   const columns = width >= 768 ? 3 : width >= 360 ? 2 : 1;
   const isMultiCol = columns > 1;
 
   const { user } = useAuth();
   const telefono = user?.telefono?.trim() ?? "";
   const canFollow = !!telefono;
+
+  // Sincroniza token con tu API
+  useDeviceTokenSync(telefono);
 
   const businessService: IBusinessService = new BusinessService(new BusinessRepository());
 
@@ -301,7 +371,7 @@ export default function HomeScreen() {
     </View>
   );
 
-  // ======= UI: card compacta =======
+  // ======= UI: card =======
   const BusinessCard = ({ item }: { item: UiBusiness }) => {
     const isFollowing = followSet.has(item.id);
     const isBusy = !!pending[item.id];
@@ -315,25 +385,15 @@ export default function HomeScreen() {
           isMultiCol ? "w-[48%]" : "w-full"
         } rounded-2xl mb-3 overflow-hidden border border-blue-100 bg-white`}
       >
-        {/* Imagen compacta */}
         <View className="h-28 bg-blue-50 relative">
           {item.logoUrl ? (
-            <Image
-              source={{ uri: item.logoUrl }}
-              className="h-full w-full"
-              resizeMode="cover"
-            />
+            <Image source={{ uri: item.logoUrl }} className="h-full w-full" resizeMode="cover" />
           ) : (
             <View className="flex-1 items-center justify-center">
-              <MaterialCommunityIcons
-                name="storefront-outline"
-                size={36}
-                color="#2563EB"
-              />
+              <MaterialCommunityIcons name="storefront-outline" size={36} color="#2563EB" />
             </View>
           )}
 
-          {/* Chips pequeños */}
           {!!item.category && (
             <View className="absolute left-2 top-2 px-2 py-[3px] rounded-full bg-white/95 border border-blue-100">
               <Text className="text-[10px] font-semibold text-blue-700" numberOfLines={1}>
@@ -342,7 +402,6 @@ export default function HomeScreen() {
             </View>
           )}
 
-          {/* Corazón */}
           <Pressable
             onPress={() => toggleFollow(item.id)}
             disabled={isBusy || !canFollow}
@@ -358,7 +417,6 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        {/* Texto compacto */}
         <View className="px-3 pt-2 pb-3">
           <Text className="font-bold text-slate-900 text-[13.5px]" numberOfLines={1}>
             {item.name}
@@ -374,15 +432,11 @@ export default function HomeScreen() {
             </Text>
           )}
 
-          {/* Footer compacto — chip flexible + botón fijo */}
           <View className="flex-row items-center justify-between mt-2">
             {isFollowing ? (
               <View className="flex-1 min-w-0 max-w-[66%] px-2 py-1 rounded-lg bg-blue-50 border border-blue-200 flex-row items-center">
                 <MaterialCommunityIcons name="wallet-outline" size={12} color="#1D4ED8" />
-                <Text
-                  className="ml-1 text-[11px] font-extrabold text-blue-700"
-                  numberOfLines={1}
-                >
+                <Text className="ml-1 text-[11px] font-extrabold text-blue-700" numberOfLines={1}>
                   {currency(puntos)}
                 </Text>
               </View>
@@ -412,22 +466,18 @@ export default function HomeScreen() {
     <View className="flex-1 bg-blue-600">
       <StatusBar barStyle="light-content" />
 
-      {/* Burbujas */}
+      {/* Burbujas decorativas */}
       <View pointerEvents="none" className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-blue-400/25" />
       <View pointerEvents="none" className="absolute -bottom-28 -left-28 h-80 w-80 rounded-full bg-blue-800/25" />
 
-        <Safe
-          className="flex-1 px-4 pb-2"
-          edges={["top", "left", "right"]}   // ← ya maneja el paddingTop del notch
-        >
+      <Safe className="flex-1 px-4 pb-2" edges={["top", "left", "right"]}>
         <View className="flex-1 bg-white rounded-3xl p-6 border border-blue-100 shadow-2xl">
-          {/* Header */}
           <Text className="text-3xl font-black text-blue-700 text-center tracking-tight">Negocios</Text>
           <Text className="text-slate-500 text-center mt-1 mb-4">
             Descubre negocios y promociones cerca de ti
           </Text>
 
-          {/* Search redondeado */}
+          {/* Search */}
           <View className="rounded-full border border-blue-100 bg-white px-4 py-3 shadow-sm flex-row items-center">
             <MaterialCommunityIcons name="magnify" size={20} color="#6B7280" />
             <TextInput
@@ -452,7 +502,7 @@ export default function HomeScreen() {
           {/* Tabs */}
           <Segmented />
 
-          {/* Grid compacto */}
+          {/* Grid */}
           <View className="flex-1 mt-3">
             {(isMine ? myLoading || initialLoading : initialLoading) ? (
               <View className="flex-1 items-center justify-center">

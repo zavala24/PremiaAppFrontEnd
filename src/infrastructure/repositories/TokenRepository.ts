@@ -18,9 +18,7 @@ const mapResponse = (res: any): ServiceResponse => {
 
 export class TokenRepository implements ITokenRepository {
   async insertOrUpdateToken(payload: InsertTokenPayload): Promise<ServiceResponse> {
-    // Ajusta la ruta al endpoint real de tu API
-    // Ejemplos comunes: "/Token/InsertOrUpdateToken", "/Token/Upsert", etc.
-    const res = await api.post("/Token/InsertOrUpdateToken", payload, {
+    const res = await api.post("/TokenDispositivo/InsertOrUpdateToken", payload, {
       validateStatus: () => true,
     });
     return mapResponse(res);

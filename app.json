@@ -2,28 +2,22 @@
   "expo": {
     "name": "PremiaApp",
     "slug": "PremiaApp",
-    "version": "1.0.0",
-    "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
-    "ios": {
-      "supportsTablet": true
-    },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      },
-      "edgeToEdgeEnabled": true
+      "package": "com.apppymespuntos",
+      "googleServicesFile": "./google-services.json",
+      "permissions": ["POST_NOTIFICATIONS"]
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    }
+    "plugins": [
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging",
+      ["expo-build-properties", {
+        "android": {
+          "minSdkVersion": 24,
+          "compileSdkVersion": 35,
+          "targetSdkVersion": 34,
+          "kotlinVersion": "2.0.21"
+        }
+      }]
+    ]
   }
 }
