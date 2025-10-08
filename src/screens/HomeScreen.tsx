@@ -476,29 +476,41 @@ export default function HomeScreen() {
           <Text className="text-slate-500 text-center mt-1 mb-4">
             Descubre negocios y promociones cerca de ti
           </Text>
-
-          {/* Search */}
-          <View className="rounded-full border border-blue-100 bg-white px-4 py-3 shadow-sm flex-row items-center">
-            <MaterialCommunityIcons name="magnify" size={20} color="#6B7280" />
-            <TextInput
-              value={localQuery}
-              onChangeText={setLocalQuery}
-              placeholder="Buscar negocios"
-              placeholderTextColor="#9CA3AF"
-              className="flex-1 ml-2 text-base text-slate-800 py-0"
-              style={{
-                paddingVertical: 0,
-                ...(Platform.OS === "android" ? { textAlignVertical: "center" as const } : null),
-              }}
-              returnKeyType="search"
-            />
-            {!!localQuery && (
-              <Pressable onPress={() => setLocalQuery("")} className="pl-2">
-                <MaterialCommunityIcons name="close-circle-outline" size={18} color="#9CA3AF" />
-              </Pressable>
-            )}
-          </View>
-
+          {/* Search — versión pill (más limpia) */}
+      <View
+        style={{
+          marginTop: 14,
+          flexDirection: "row",
+          alignItems: "center",
+          backgroundColor: "#FFFFFF",
+          borderRadius: 999,
+          borderWidth: 1,
+          borderColor: "#E5E7EB",
+          paddingHorizontal: 12,
+          height: 48,
+        }}
+      >
+        <MaterialCommunityIcons name="magnify" size={22} color="#64748B" />
+        <TextInput
+          value={localQuery}
+          onChangeText={setLocalQuery}
+          placeholder="Buscar negocios"
+          placeholderTextColor="#94A3B8"
+          style={{
+            flex: 1,
+            marginLeft: 8,
+            color: "#0F172A",
+            paddingVertical: 0,
+            ...(Platform.OS === "android" ? { textAlignVertical: "center" as const } : null),
+          }}
+          returnKeyType="search"
+        />
+        {!!localQuery && (
+          <Pressable onPress={() => setLocalQuery("")} hitSlop={8}>
+            <MaterialCommunityIcons name="close-circle-outline" size={18} color="#94A3B8" />
+          </Pressable>
+        )}
+      </View>
           {/* Tabs */}
           <Segmented />
 
