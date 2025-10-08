@@ -1,32 +1,34 @@
 import React, { useEffect } from "react";
-import { styled } from "nativewind";
-import { View as RNView, Text as RNText } from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-
-// Styled components
-const View = styled(RNView);
-const Text = styled(RNText);
-
-// Define el tipo de tu Stack Navigator
-type StackParamList = {
-  Login: undefined;
-  Tabs: undefined;
-};
-
-type LogoutScreenNavigationProp = NativeStackNavigationProp<StackParamList, "Tabs">;
+import { View, ActivityIndicator, Text } from "react-native";
+import { useNavigation, CommonActions } from "@react-navigation/native";
+import { useAuth } from "../presentation/context/AuthContext";
 
 export default function LogoutScreen() {
-  const navigation = useNavigation<LogoutScreenNavigationProp>();
+  const navigation = useNavigation();
+  const { logout } = useAuth();
 
-  // Cuando se monta, redirige a Login
   useEffect(() => {
-    navigation.replace("Login");
-  }, []);
+    (async () => {
+      try {
+        // Limpia sesión (borra @auth_user, @auth_token y header Authorization)
+        await logout();
+      } finally {
+        // Resetea el stack padre (donde está Login/Tabs) hacia Login
+        const root = navigation.getParent() ?? navigation;
+        root.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: "Login" as never }],
+          })
+        );
+      }
+    })();
+  }, [logout, navigation]);
 
   return (
-    <View className="flex-1 justify-center items-center bg-red-50">
-      <Text className="text-red-700 font-bold text-lg">Cerrando sesión...</Text>
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+      <ActivityIndicator />
+      <Text style={{ marginTop: 8 }}>Cerrando sesión…</Text>
     </View>
   );
 }

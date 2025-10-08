@@ -18,6 +18,7 @@ const mapResponse = (res: any): ServiceResponse => {
 
 export class TokenRepository implements ITokenRepository {
   async insertOrUpdateToken(payload: InsertTokenPayload): Promise<ServiceResponse> {
+
     const res = await api.post("/TokenDispositivo/InsertOrUpdateToken", payload, {
       validateStatus: () => true,
     });
