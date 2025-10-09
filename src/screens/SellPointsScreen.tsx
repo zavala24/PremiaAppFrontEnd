@@ -60,7 +60,7 @@ const sanitizeAmount = (raw: string) => {
   const cleaned = raw.replace(/,/g, ".").replace(/[^0-9.]/g, "");
   const parts = cleaned.split(".");
   if (parts.length <= 2) return cleaned;
-  return `${parts[0]}.${parts.slice(1).join("")}`; // colapsa puntos extra
+  return `${parts[0]}.${parts.slice(1).join("")}`;
 };
 
 // Prefijo del país para WhatsApp (MX por defecto)
@@ -164,7 +164,7 @@ export default function SellPointsScreen() {
   const waTimerRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => () => waTimerRef.current && clearTimeout(waTimerRef.current), []);
 
-  // Dots animados para "Buscando..."
+  // Dots animados para "Buscando…"
   const [dots, setDots] = useState(0);
   useEffect(() => {
     if (!loadingLookup) {
@@ -255,12 +255,12 @@ export default function SellPointsScreen() {
 
   /* ===== Inputs controlados ===== */
 
-  // TELÉFONO: solo dígitos y *bloqueo fuerte* a 10 (ignora extras)
+  // TELÉFONO: solo 10 dígitos (bloqueo fuerte)
   const onChangePhone = (v: string) => {
     setPhone((prev) => {
       const digits = sanitizePhone(v);
-      if (digits.length <= 10) return digits; // actualiza normal
-      return prev;                              // ignora cualquier extra
+      if (digits.length <= 10) return digits;
+      return prev;
     });
     setUserValid(null);
   };
@@ -366,13 +366,20 @@ export default function SellPointsScreen() {
       className="flex-1 bg-blue-600"
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      {/* Burbujas decorativas */}
+      {/* Burbujas (fijas) */}
       <View pointerEvents="none" className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-blue-400/25" />
       <View pointerEvents="none" className="absolute -bottom-28 -left-28 h-80 w-80 rounded-full bg-blue-800/25" />
 
       <Safe className="flex-1 px-4">
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingVertical: 12 }}>
-          <View className="bg-white rounded-3xl p-6 border border-blue-100 shadow-2xl">
+        {/* Card FIJO (como Home), con margen superior para el FAB */}
+        <View className="flex-1 bg-white rounded-3xl p-6 border border-blue-100 shadow-2xl mt-16">
+          {/* Scroll SOLO dentro del card */}
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 16 }}
+            className="flex-1"
+          >
             {/* Header negocio */}
             {bizLoading ? (
               <View className="items-center py-6">
@@ -393,25 +400,26 @@ export default function SellPointsScreen() {
                     <MaterialCommunityIcons name="storefront-outline" size={38} color="#2563EB" />
                   )}
                 </View>
-                <Text className="text-lg font-extrabold text-blue-700">{business?.name ?? "Mi negocio"}</Text>
+                <Text className="text-lg font-extrabold text-blue-700">
+                  {business?.name ?? "Mi negocio"}
+                </Text>
               </View>
             )}
 
             {/* Teléfono del CLIENTE */}
             <Text className="text-gray-500 mb-2">Número de teléfono del cliente (obligatorio)</Text>
 
-            {/* ROW: icono + input + botón (espaciado y bloqueo numérico) */}
+            {/* Row: icono + input + botón */}
             <View className="flex-row items-center rounded-2xl border border-gray-300 bg-white px-4 py-3">
               <MaterialCommunityIcons name="phone" size={20} color="#6B7280" style={{ marginRight: 8 }} />
-
               <TextInput
                 value={phone}
-                onChangeText={onChangePhone}               // ← IGNORA extras >10
+                onChangeText={onChangePhone}
                 placeholder="5512345678"
                 placeholderTextColor="#9CA3AF"
                 className="flex-1 text-base text-gray-800 mr-3"
                 style={{
-                  paddingVertical: 0,                       // centra placeholder/valor en iOS
+                  paddingVertical: 0,
                   ...(Platform.OS === "android" ? { textAlignVertical: "center" as const } : null),
                 }}
                 keyboardType="number-pad"
@@ -419,16 +427,19 @@ export default function SellPointsScreen() {
                 textContentType="telephoneNumber"
                 autoComplete="tel"
                 autoCorrect={false}
-                maxLength={10}                              // tope UI
+                maxLength={10}
                 returnKeyType="done"
               />
-
               <Pressable
                 onPress={handleLookup}
                 className={`ml-3 px-4 py-2 rounded-xl ${loadingLookup ? "bg-blue-200" : "bg-blue-600"} shrink-0`}
                 disabled={loadingLookup || !!bizError || bizLoading}
               >
-                {loadingLookup ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-semibold">Buscar</Text>}
+                {loadingLookup ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text className="text-white font-semibold">Buscar</Text>
+                )}
               </Pressable>
             </View>
 
@@ -436,7 +447,9 @@ export default function SellPointsScreen() {
             {loadingLookup && (
               <View className="flex-row items-center mt-2 px-3 py-2 rounded-xl bg-blue-50 border border-blue-100">
                 <MaterialCommunityIcons name="magnify" size={18} color="#2563EB" />
-                <Text className="ml-2 text-blue-800 font-medium">Buscando usuario{".".repeat(dots)}</Text>
+                <Text className="ml-2 text-blue-800 font-medium">
+                  Buscando usuario{".".repeat(dots)}
+                </Text>
               </View>
             )}
 
@@ -452,7 +465,8 @@ export default function SellPointsScreen() {
               <View className="bg-blue-50 border border-blue-100 rounded-2xl p-3 mt-3">
                 <Text className="text-blue-900 font-semibold">{customerName}</Text>
                 <Text className="text-blue-700/70 mt-1">
-                  Saldo disponible: <Text className="font-semibold">{currency(customerBalance)}</Text>
+                  Saldo disponible:{" "}
+                  <Text className="font-semibold">{currency(customerBalance)}</Text>
                 </Text>
               </View>
             )}
@@ -460,7 +474,13 @@ export default function SellPointsScreen() {
             {/* Artículo */}
             <Text className="text-gray-500 mt-5 mb-2">Artículo</Text>
             <View className="rounded-2xl border border-gray-300 bg-white px-4 py-3">
-              <TextInput value={article} onChangeText={setArticle} placeholder="Ej. Pizza grande" placeholderTextColor="#9CA3AF" className="text-base text-gray-800" />
+              <TextInput
+                value={article}
+                onChangeText={setArticle}
+                placeholder="Ej. Pizza grande"
+                placeholderTextColor="#9CA3AF"
+                className="text-base text-gray-800"
+              />
             </View>
 
             {/* Monto */}
@@ -468,7 +488,7 @@ export default function SellPointsScreen() {
             <View className="rounded-2xl border border-gray-300 bg-white px-4 py-3">
               <TextInput
                 value={amount}
-                onChangeText={onChangeAmount}               // ← sanitiza monto
+                onChangeText={onChangeAmount}
                 placeholder="0.00"
                 placeholderTextColor="#9CA3AF"
                 className="text-base text-gray-800"
@@ -481,12 +501,20 @@ export default function SellPointsScreen() {
             {/* Descripción */}
             <Text className="text-gray-500 mt-5 mb-2">Descripción</Text>
             <View className="rounded-2xl border border-gray-300 bg-white px-4 py-3">
-              <TextInput value={description} onChangeText={setDescription} placeholder="Ej. Con refresco incluido" placeholderTextColor="#9CA3AF" className="text-base text-gray-800" />
+              <TextInput
+                value={description}
+                onChangeText={setDescription}
+                placeholder="Ej. Con refresco incluido"
+                placeholderTextColor="#9CA3AF"
+                className="text-base text-gray-800"
+              />
             </View>
 
             {/* Switch aplicar saldo */}
             <View className="flex-row items-center justify-between mt-5">
-              <Text className="text-gray-900 font-semibold">Aplicar puntos disponibles</Text>
+              <Text className="text-gray-900 font-semibold">
+                Aplicar puntos disponibles
+              </Text>
               <Switch value={wantsRedeem} onValueChange={setWantsRedeem} />
             </View>
 
@@ -501,48 +529,72 @@ export default function SellPointsScreen() {
             <Pressable
               onPress={handleSubmit}
               disabled={loadingSubmit || bizLoading || !!bizError || userValid !== true}
-              className={`mt-5 py-4 rounded-2xl items-center ${loadingSubmit || userValid !== true ? "bg-blue-300" : "bg-green-500"}`}
+              className={`mt-5 py-4 rounded-2xl items-center ${
+                loadingSubmit || userValid !== true ? "bg-blue-300" : "bg-green-500"
+              }`}
             >
-              {loadingSubmit ? <ActivityIndicator color="#0b1220" /> : <Text className="text-[#0b1220] font-extrabold">Confirmar venta</Text>}
+              {loadingSubmit ? (
+                <ActivityIndicator color="#0b1220" />
+              ) : (
+                <Text className="text-[#0b1220] font-extrabold">Confirmar venta</Text>
+              )}
             </Pressable>
-          </View>
-        </ScrollView>
+          </ScrollView>
+        </View>
       </Safe>
 
       {/* ===== Modal WhatsApp ===== */}
-      <RNModal visible={waModalVisible} animationType="fade" transparent onRequestClose={() => setWaModalVisible(false)}>
+      <RNModal
+        visible={waModalVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setWaModalVisible(false)}
+      >
         <View className="flex-1 bg-black/60 items-center justify-center px-6">
           <View className="w-full max-w-md bg-white rounded-3xl p-5 border border-blue-100">
             <View className="items-center mb-3">
               <View className="h-12 w-12 rounded-full bg-green-100 items-center justify-center">
                 <MaterialCommunityIcons name="whatsapp" size={28} color="#16a34a" />
               </View>
-              <Text className="text-xl font-extrabold text-slate-900 mt-3">Enviar por WhatsApp</Text>
-              <Text className="text-slate-600 mt-1 text-center">¿Quieres enviar el comprobante de la venta al cliente por WhatsApp?</Text>
+              <Text className="text-xl font-extrabold text-slate-900 mt-3">
+                Enviar por WhatsApp
+              </Text>
+              <Text className="text-slate-600 mt-1 text-center">
+                ¿Quieres enviar el comprobante de la venta al cliente por WhatsApp?
+              </Text>
             </View>
 
             <View className="flex-row gap-3 mt-4">
-              <Pressable className="flex-1 py-3 rounded-2xl border border-slate-300 items-center" onPress={() => { setWaModalVisible(false); clearForm(); }}>
+              <Pressable
+                className="flex-1 py-3 rounded-2xl border border-slate-300 items-center"
+                onPress={() => {
+                  setWaModalVisible(false);
+                  clearForm();
+                }}
+              >
                 <Text className="text-slate-700 font-semibold">NO</Text>
               </Pressable>
 
-              <Pressable className="flex-1 py-3 rounded-2xl items-center bg-green-500" onPress={async () => {
-                if (waContext) {
-                  const msg = buildWhatsAppMessage({
-                    businessName: waContext.businessName,
-                    customerName: waContext.customerName,
-                    article: waContext.article,
-                    amount: waContext.amount,
-                    applied: waContext.applied,
-                    total: waContext.total,
-                    saldoAntes: waContext.saldoAntes,
-                    saldoDespues: waContext.saldoDespues,
-                  });
-                  await sendWhatsApp(waContext.toPhone, msg);
-                }
-                setWaModalVisible(false);
-                clearForm();
-              }}>
+              <Pressable
+                className="flex-1 py-3 rounded-2xl items-center bg-green-500"
+                onPress={async () => {
+                  if (waContext) {
+                    const msg = buildWhatsAppMessage({
+                      businessName: waContext.businessName,
+                      customerName: waContext.customerName,
+                      article: waContext.article,
+                      amount: waContext.amount,
+                      applied: waContext.applied,
+                      total: waContext.total,
+                      saldoAntes: waContext.saldoAntes,
+                      saldoDespues: waContext.saldoDespues,
+                    });
+                    await sendWhatsApp(waContext.toPhone, msg);
+                  }
+                  setWaModalVisible(false);
+                  clearForm();
+                }}
+              >
                 <Text className="text-white font-extrabold">SÍ</Text>
               </Pressable>
             </View>
@@ -557,7 +609,9 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
   return (
     <View className="flex-row justify-between mt-2">
       <Text className="text-gray-300">{label}</Text>
-      <Text className={`text-white ${strong ? "font-extrabold" : "font-semibold"}`}>{value}</Text>
+      <Text className={`text-white ${strong ? "font-extrabold" : "font-semibold"}`}>
+        {value}
+      </Text>
     </View>
   );
 }

@@ -188,7 +188,7 @@ export default function ConfigurationScreen() {
         >
           <View className="flex-1 items-center justify-center py-6">
             <View
-              className="w-full rounded-3xl bg-white shadow-2xl p-6"
+              className="w-full rounded-3xl bg-white shadow-2xl p-6 mt-16"
               style={{ maxWidth: 460 }}
             >
               <Text className="text-2xl font-extrabold text-blue-700 mb-1 text-center">

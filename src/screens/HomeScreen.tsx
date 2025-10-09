@@ -409,7 +409,7 @@ export default function HomeScreen() {
       <View pointerEvents="none" className="absolute -bottom-28 -left-28 h-80 w-80 rounded-full bg-blue-800/25" />
 
       <Safe className="flex-1 px-4 pb-2" edges={["top", "left", "right"]}>
-        <View className="flex-1 bg-white rounded-3xl p-6 border border-blue-100 shadow-2xl">
+        <View className="flex-1 bg-white rounded-3xl p-6 border border-blue-100 shadow-2xl mt-16">
           <Text className="text-3xl font-black text-blue-700 text-center tracking-tight">Negocios</Text>
           <Text className="text-slate-500 text-center mt-1">Descubre negocios y promociones cerca de ti</Text>
 
