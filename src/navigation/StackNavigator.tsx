@@ -1,15 +1,16 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import LoginScreen from "../screens/LoginScreen";
-import TabNavigator from "./TabNavigator";
+import TabNavigator, { TabParamList } from "./TabNavigator";
 import RegisterScreen from "../screens/RegisterScreen";
 import BusinessDetailScreen from "../screens/BusinessDetailScreen";
+import { NavigatorScreenParams } from "@react-navigation/native";
 
 export type RootStackParamList = {
   Login: { fromRegister?: boolean; registeredPhone?: string } | undefined;
   Register: undefined;
-  Tabs: undefined;
   SellPoints: undefined; 
+  Tabs: NavigatorScreenParams<TabParamList>; 
   BusinessDetail: {
     business: {
       id: number;

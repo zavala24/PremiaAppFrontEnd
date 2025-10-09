@@ -1,21 +1,25 @@
 import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import LoginScreen from "./src/screens/LoginScreen";
-import TabNavigator from "./src/navigation/TabNavigator";
-import Toast from "react-native-toast-message";
-import { AuthProvider } from "./src/presentation/context/AuthContext";
-import StackNavigator, { RootStackParamList } from "./src/navigation/StackNavigator";
+import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
+import { AuthProvider } from "./src/presentation/context/AuthContext";
+import StackNavigator from "./src/navigation/StackNavigator";
+import GlobalHamburger from "./src/components/GlobalHamburger";
 
 export default function App() {
   return (
-    <AuthProvider>
-      <NavigationContainer>
-        <StackNavigator/>
-        <Toast />
-      </NavigationContainer>
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      {/* 👇 Debe envolver TODO (opcional initialWindowMetrics evita un bug al arrancar en Android) */}
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+        <AuthProvider>
+          {/* 👇 GlobalHamburger DEBE vivir dentro del NavigationContainer */}
+          <NavigationContainer>
+            <GlobalHamburger />
+            <StackNavigator />
+          </NavigationContainer>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

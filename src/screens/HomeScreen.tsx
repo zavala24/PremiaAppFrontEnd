@@ -20,21 +20,20 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import { RootStackParamList } from "../navigation/StackNavigator";
+import type { RootStackParamList } from "../navigation/StackNavigator";
 import { useAuth } from "../presentation/context/AuthContext";
 import { useBusinessesPaged, ApiBusiness } from "../presentation/hooks/useBusinessPaged";
 import { BusinessService } from "../application/services/BusinessService";
 import { BusinessRepository } from "../infrastructure/repositories/BusinessRepository";
 import { IBusinessService } from "../application/interfaces/IBusinessService";
 
-// Firebase (API modular RNFirebase)
+// Firebase modular RNFirebase
 import { getApp } from "@react-native-firebase/app";
 import { getMessaging, getToken, onTokenRefresh } from "@react-native-firebase/messaging";
 
-// Repo para enviar el token
+// Token repo
 import { TokenRepository } from "../infrastructure/repositories/TokenRepository";
 import { InsertTokenPayload } from "../domain/repositories/ITokenRepository";
-
 
 const View = styled(RNView);
 const Text = styled(RNText);
@@ -59,7 +58,6 @@ type UiBusiness = {
 type TabKey = "all" | "mine";
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-// formato $ MXN
 const currency = (n?: number | null) =>
   new Intl.NumberFormat("es-MX", {
     style: "currency",
@@ -68,7 +66,7 @@ const currency = (n?: number | null) =>
     maximumFractionDigits: 2,
   }).format(typeof n === "number" ? n : 0);
 
-// =================== Hook local: sincroniza FCM token ===================
+// =================== Sync FCM token ===================
 const tokenKey = (tel: string) => `fcmToken:${tel}`;
 const onlyDigits = (s: string) => (s || "").replace(/\D+/g, "");
 
@@ -86,38 +84,27 @@ function useDeviceTokenSync(telefono?: string) {
         const app = getApp();
         const msg = getMessaging(app);
 
-        // token actual
         const token = await getToken(msg);
         const prev = await AsyncStorage.getItem(tokenKey(numeroTelefono));
 
         if (token && token !== prev) {
-          const payload: InsertTokenPayload = {
-            numeroTelefono,
-            token,
-          };
+          const payload: InsertTokenPayload = { numeroTelefono, token };
           const r = await repo.insertOrUpdateToken(payload);
           if (r.status >= 200 && r.status < 300) {
             await AsyncStorage.setItem(tokenKey(numeroTelefono), token);
-
-          } 
+          }
         }
 
-        // refresh
         unsub = onTokenRefresh(msg, async (newToken) => {
           try {
-            const payload: InsertTokenPayload = {
-              numeroTelefono,
-              token: newToken,
-            };
+            const payload: InsertTokenPayload = { numeroTelefono, token: newToken };
             const r = await repo.insertOrUpdateToken(payload);
             if (r.status >= 200 && r.status < 300) {
               await AsyncStorage.setItem(tokenKey(numeroTelefono), newToken);
-            } 
-          } catch (e) {
-          }
+            }
+          } catch {}
         });
-      } catch (e) {
-      }
+      } catch {}
     })();
 
     return () => {
@@ -125,7 +112,7 @@ function useDeviceTokenSync(telefono?: string) {
     };
   }, [telefono, repo]);
 }
-// =======================================================================
+// ======================================================
 
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
@@ -139,7 +126,6 @@ export default function HomeScreen() {
   const telefono = user?.telefono?.trim() ?? "";
   const canFollow = !!telefono;
 
-  // Sincroniza token con tu API
   useDeviceTokenSync(telefono);
 
   const businessService: IBusinessService = new BusinessService(new BusinessRepository());
@@ -186,11 +172,8 @@ export default function HomeScreen() {
     if (!canFollow) return;
     setMyLoading(true);
     try {
-      const { status, data, message } =
-        await businessService.getNegociosSeguidosByTelefono(telefono);
-
-      if (status < 200 || status >= 300)
-        throw new Error(message || "No se pudieron obtener tus negocios.");
+      const { status, data, message } = await businessService.getNegociosSeguidosByTelefono(telefono);
+      if (status < 200 || status >= 300) throw new Error(message || "No se pudieron obtener tus negocios.");
 
       const ui = (data ?? []).map((b) => ({
         id: b.id,
@@ -220,7 +203,6 @@ export default function HomeScreen() {
     }
   };
 
-  // Carga inicial seguidos
   const didLoadFollows = useRef(false);
   useEffect(() => {
     if (!canFollow) return;
@@ -253,25 +235,19 @@ export default function HomeScreen() {
   const [pending, setPending] = useState<Record<number, boolean>>({});
   const toggleFollow = async (businessId: number) => {
     if (!canFollow) {
-      Alert.alert(
-        "Acción no permitida",
-        "Inicia sesión y agrega tu teléfono para seguir negocios."
-      );
+      Alert.alert("Acción no permitida", "Inicia sesión y agrega tu teléfono para seguir negocios.");
       return;
     }
     if (pending[businessId]) return;
 
     const willFollow = !followSet.has(businessId);
-
-    // UI optimista
     setPending((p) => ({ ...p, [businessId]: true }));
     setFollowSet((s) => {
       const next = new Set(s);
       willFollow ? next.add(businessId) : next.delete(businessId);
       return next;
     });
-    if (willFollow)
-      setPointsByBiz((m) => ({ ...m, [businessId]: m[businessId] ?? 0 }));
+    if (willFollow) setPointsByBiz((m) => ({ ...m, [businessId]: m[businessId] ?? 0 }));
     else
       setPointsByBiz((m) => {
         const { [businessId]: _, ...rest } = m;
@@ -279,23 +255,15 @@ export default function HomeScreen() {
       });
 
     try {
-      const resp = await businessService.actualizarSeguirNegocioByTelefono(
-        businessId,
-        telefono,
-        willFollow
-      );
-      if (resp.status < 200 || resp.status >= 300)
-        throw new Error(resp.message || "No se pudo actualizar el seguimiento.");
-
+      const resp = await businessService.actualizarSeguirNegocioByTelefono(businessId, telefono, willFollow);
+      if (resp.status < 200 || resp.status >= 300) throw new Error(resp.message || "No se pudo actualizar.");
       if (willFollow) {
         const found = uiAll.find((x) => x.id === businessId);
-        if (found && !myItems.some((x) => x.id === businessId))
-          setMyItems((arr) => [{ ...found, puntosAcumulados: 0 }, ...arr]);
+        if (found && !myItems.some((x) => x.id === businessId)) setMyItems((arr) => [{ ...found, puntosAcumulados: 0 }, ...arr]);
       } else {
         setMyItems((arr) => arr.filter((x) => x.id !== businessId));
       }
     } catch (e: any) {
-      // rollback
       setFollowSet((s) => {
         const next = new Set(s);
         willFollow ? next.delete(businessId) : next.add(businessId);
@@ -312,7 +280,6 @@ export default function HomeScreen() {
     }
   };
 
-  // ======= Helpers UI =======
   const listRef = useRef<FlatList<UiBusiness>>(null);
   useEffect(() => {
     listRef.current?.scrollToOffset({ offset: 0, animated: false });
@@ -334,7 +301,6 @@ export default function HomeScreen() {
     });
   };
 
-  // ======= UI: segmented =======
   const Segmented = () => (
     <View className="mt-4 rounded-2xl bg-blue-50 border border-blue-100 p-1 flex-row">
       {[
@@ -348,43 +314,25 @@ export default function HomeScreen() {
             key={t.key}
             onPress={() =>
               disabled
-                ? Alert.alert(
-                    "Solo para cuentas con teléfono",
-                    "Inicia sesión y agrega tu teléfono para ver tus negocios seguidos."
-                  )
+                ? Alert.alert("Solo para cuentas con teléfono", "Inicia sesión y agrega tu teléfono para ver tus negocios seguidos.")
                 : setTab(t.key)
             }
-            className={`flex-1 py-2 rounded-xl items-center ${
-              active ? "bg-white shadow-sm" : ""
-            } ${disabled ? "opacity-40" : ""}`}
+            className={`flex-1 py-2 rounded-xl items-center ${active ? "bg-white shadow-sm" : ""} ${disabled ? "opacity-40" : ""}`}
           >
-            <Text
-              className={`font-semibold ${
-                active ? "text-blue-700" : "text-blue-600/70"
-              }`}
-            >
-              {t.label}
-            </Text>
+            <Text className={`font-semibold ${active ? "text-blue-700" : "text-blue-600/70"}`}>{t.label}</Text>
           </Pressable>
         );
       })}
     </View>
   );
 
-  // ======= UI: card =======
   const BusinessCard = ({ item }: { item: UiBusiness }) => {
     const isFollowing = followSet.has(item.id);
     const isBusy = !!pending[item.id];
-    const puntos = isFollowing
-      ? pointsByBiz[item.id] ?? item.puntosAcumulados ?? 0
-      : undefined;
+    const puntos = isFollowing ? pointsByBiz[item.id] ?? item.puntosAcumulados ?? 0 : undefined;
 
     return (
-      <View
-        className={`${
-          isMultiCol ? "w-[48%]" : "w-full"
-        } rounded-2xl mb-3 overflow-hidden border border-blue-100 bg-white`}
-      >
+      <View className={`${isMultiCol ? "w-[48%]" : "w-full"} rounded-2xl mb-3 overflow-hidden border border-blue-100 bg-white`}>
         <View className="h-28 bg-blue-50 relative">
           {item.logoUrl ? (
             <Image source={{ uri: item.logoUrl }} className="h-full w-full" resizeMode="cover" />
@@ -409,11 +357,7 @@ export default function HomeScreen() {
               isBusy || !canFollow ? "opacity-50" : "active:opacity-90"
             }`}
           >
-            <MaterialCommunityIcons
-              name={isFollowing ? "heart" : "heart-outline"}
-              size={18}
-              color={isFollowing ? "#EF4444" : "#1F2937"}
-            />
+            <MaterialCommunityIcons name={isFollowing ? "heart" : "heart-outline"} size={18} color={isFollowing ? "#EF4444" : "#1F2937"} />
           </Pressable>
         </View>
 
@@ -444,10 +388,7 @@ export default function HomeScreen() {
               <View className="h-[26px] flex-1" />
             )}
 
-            <Pressable
-              onPress={() => gotoDetail(item)}
-              className="h-8 px-3 rounded-lg bg-white border border-blue-600 items-center justify-center ml-2 shrink-0"
-            >
+            <Pressable onPress={() => gotoDetail(item)} className="h-8 px-3 rounded-lg bg-white border border-blue-600 items-center justify-center ml-2 shrink-0">
               <Text className="text-blue-700 font-semibold text-[12px]" allowFontScaling={false}>
                 Ver
               </Text>
@@ -458,63 +399,58 @@ export default function HomeScreen() {
     );
   };
 
-  // ======= Render =======
   const isMine = tab === "mine";
   const data = isMine ? myItems : uiAll;
 
   return (
     <View className="flex-1 bg-blue-600">
       <StatusBar barStyle="light-content" />
-
-      {/* Burbujas decorativas */}
       <View pointerEvents="none" className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-blue-400/25" />
       <View pointerEvents="none" className="absolute -bottom-28 -left-28 h-80 w-80 rounded-full bg-blue-800/25" />
 
       <Safe className="flex-1 px-4 pb-2" edges={["top", "left", "right"]}>
         <View className="flex-1 bg-white rounded-3xl p-6 border border-blue-100 shadow-2xl">
           <Text className="text-3xl font-black text-blue-700 text-center tracking-tight">Negocios</Text>
-          <Text className="text-slate-500 text-center mt-1 mb-4">
-            Descubre negocios y promociones cerca de ti
-          </Text>
-          {/* Search — versión pill (más limpia) */}
-      <View
-        style={{
-          marginTop: 14,
-          flexDirection: "row",
-          alignItems: "center",
-          backgroundColor: "#FFFFFF",
-          borderRadius: 999,
-          borderWidth: 1,
-          borderColor: "#E5E7EB",
-          paddingHorizontal: 12,
-          height: 48,
-        }}
-      >
-        <MaterialCommunityIcons name="magnify" size={22} color="#64748B" />
-        <TextInput
-          value={localQuery}
-          onChangeText={setLocalQuery}
-          placeholder="Buscar negocios"
-          placeholderTextColor="#94A3B8"
-          style={{
-            flex: 1,
-            marginLeft: 8,
-            color: "#0F172A",
-            paddingVertical: 0,
-            ...(Platform.OS === "android" ? { textAlignVertical: "center" as const } : null),
-          }}
-          returnKeyType="search"
-        />
-        {!!localQuery && (
-          <Pressable onPress={() => setLocalQuery("")} hitSlop={8}>
-            <MaterialCommunityIcons name="close-circle-outline" size={18} color="#94A3B8" />
-          </Pressable>
-        )}
-      </View>
-          {/* Tabs */}
+          <Text className="text-slate-500 text-center mt-1">Descubre negocios y promociones cerca de ti</Text>
+
+          {/* Search pill */}
+          <View
+            style={{
+              marginTop: 14,
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: "#FFFFFF",
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: "#E5E7EB",
+              paddingHorizontal: 12,
+              height: 48,
+            }}
+          >
+            <MaterialCommunityIcons name="magnify" size={22} color="#64748B" />
+            <TextInput
+              value={localQuery}
+              onChangeText={setLocalQuery}
+              placeholder="Buscar negocios"
+              placeholderTextColor="#94A3B8"
+              style={{
+                flex: 1,
+                marginLeft: 8,
+                color: "#0F172A",
+                paddingVertical: 0,
+                ...(Platform.OS === "android" ? { textAlignVertical: "center" as const } : null),
+              }}
+              returnKeyType="search"
+            />
+            {!!localQuery && (
+              <Pressable onPress={() => setLocalQuery("")} hitSlop={8}>
+                <MaterialCommunityIcons name="close-circle-outline" size={18} color="#94A3B8" />
+              </Pressable>
+            )}
+          </View>
+
           <Segmented />
 
-          {/* Grid */}
           <View className="flex-1 mt-3">
             {(isMine ? myLoading || initialLoading : initialLoading) ? (
               <View className="flex-1 items-center justify-center">
@@ -544,18 +480,10 @@ export default function HomeScreen() {
                 ListEmptyComponent={
                   <View className="items-center mt-16">
                     <MaterialCommunityIcons name="text-search" size={36} color="#93C5FD" />
-                    <Text className="text-blue-800/70 mt-2">
-                      {isMine ? "Aún no sigues ningún negocio" : "Sin resultados"}
-                    </Text>
+                    <Text className="text-blue-800/70 mt-2">{isMine ? "Aún no sigues ningún negocio" : "Sin resultados"}</Text>
                   </View>
                 }
-                ListFooterComponent={
-                  !isMine && loading && hasNext ? (
-                    <View className="py-4">
-                      <ActivityIndicator color="#2563EB" />
-                    </View>
-                  ) : null
-                }
+                ListFooterComponent={!isMine && loading && hasNext ? <View className="py-4"><ActivityIndicator color="#2563EB" /></View> : null}
               />
             )}
           </View>
