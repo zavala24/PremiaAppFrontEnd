@@ -1,16 +1,20 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import LoginScreen from "../screens/LoginScreen";
-import TabNavigator, { TabParamList } from "./TabNavigator";
-import RegisterScreen from "../screens/RegisterScreen";
-import BusinessDetailScreen from "../screens/BusinessDetailScreen";
 import { NavigatorScreenParams } from "@react-navigation/native";
+
+import LoginScreen from "../screens/LoginScreen";
+import RegisterScreen from "../screens/RegisterScreen";
+import TabNavigator, { TabParamList } from "./TabNavigator";
+import BusinessDetailScreen from "../screens/BusinessDetailScreen";
+import CreateUserScreen from "../screens/CreateUserScreen";
+import LogoutScreen from "../screens/LogoutScreen";
+import { useAuth } from "../presentation/context/AuthContext";
 
 export type RootStackParamList = {
   Login: { fromRegister?: boolean; registeredPhone?: string } | undefined;
   Register: undefined;
-  SellPoints: undefined; 
-  Tabs: NavigatorScreenParams<TabParamList>; 
+  // 👇 Ahora Tabs acepta navegación anidada correctamente
+  Tabs: NavigatorScreenParams<TabParamList> | undefined;
   BusinessDetail: {
     business: {
       id: number;
@@ -24,20 +28,32 @@ export type RootStackParamList = {
       descripcion?: string | null;
     };
   };
+  // 👇 Agregadas como pantallas del Stack
+  CreateUser: undefined;
+  Logout: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function StackNavigator() {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+
   return (
-    <Stack.Navigator
-      id={undefined} // ✅ Agregado para TypeScript
-      screenOptions={{ headerShown: false }}
-    >
-      <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="Tabs" component={TabNavigator} />
-      <Stack.Screen name="Register" component={RegisterScreen} />
-      <Stack.Screen name="BusinessDetail" component={BusinessDetailScreen} />
+    <Stack.Navigator id={undefined} screenOptions={{ headerShown: false }}>
+      {user ? (
+        <>
+          <Stack.Screen name="Tabs" component={TabNavigator} />
+          <Stack.Screen name="BusinessDetail" component={BusinessDetailScreen} />
+          <Stack.Screen name="CreateUser" component={CreateUserScreen} />
+          <Stack.Screen name="Logout" component={LogoutScreen} />
+        </>
+      ) : (
+        <>
+          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="Register" component={RegisterScreen} />
+        </>
+      )}
     </Stack.Navigator>
   );
 }

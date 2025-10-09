@@ -1,27 +1,24 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { Ionicons } from "@expo/vector-icons";
+
 import HomeScreen from "../screens/HomeScreen";
 import ConfigurationScreen from "../screens/ConfigurationScreen";
-import CreateUserScreen from "../screens/CreateUserScreen";
-import LogoutScreen from "../screens/LogoutScreen";
-import SellPointsScreen from "../screens/SellPointsScreen"; // ⬅️ NUEVO
-import { Ionicons } from "@expo/vector-icons";
+import SellPointsScreen from "../screens/SellPointsScreen";
 import { useAuth } from "../presentation/context/AuthContext";
 
 export type TabParamList = {
   Home: undefined;
-  SellPoints: undefined;   // ⬅️ NUEVO
-  Points: undefined;
-  Configuration: undefined;
-  CreateUser: undefined;
-  Logout: undefined;
+  SellPoints: undefined;
+  Configuration: undefined; 
+   CreateUser: undefined;
 };
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
 export default function TabNavigator() {
   const { user } = useAuth();
-  const role = user?.role?.toUpperCase(); // "ADMIN" | "SUPERADMIN" | "USER" | undefined
+  const role = user?.role?.toUpperCase();
   const isAdmin = role === "ADMIN" || role === "SUPERADMIN";
 
   return (
@@ -34,37 +31,18 @@ export default function TabNavigator() {
         tabBarInactiveTintColor: "gray",
         tabBarStyle: { backgroundColor: "white", paddingVertical: 8 },
         tabBarIcon: ({ focused, color, size }) => {
-          let iconName: keyof typeof Ionicons.glyphMap;
-          switch (route.name) {
-            case "Home":
-              iconName = focused ? "home" : "home-outline";
-              break;
-            case "SellPoints":
-              iconName = focused ? "cash" : "cash-outline"; // ⬅️ icono del nuevo tab
-              break;
-            case "Points":
-              iconName = focused ? "trophy" : "trophy-outline";
-              break;
-            case "Configuration":
-              iconName = focused ? "settings" : "settings-outline";
-              break;
-            case "CreateUser":
-              iconName = focused ? "person-add" : "person-add-outline";
-              break;
-            case "Logout":
-              iconName = focused ? "log-out" : "log-out-outline";
-              break;
-            default:
-              iconName = "ellipse";
-          }
-          return <Ionicons name={iconName} size={size} color={color} />;
+          let icon: keyof typeof Ionicons.glyphMap = "ellipse";
+          if (route.name === "Home") icon = focused ? "home" : "home-outline";
+          if (route.name === "SellPoints") icon = focused ? "cash" : "cash-outline";
+          if (route.name === "Configuration") icon = focused ? "settings" : "settings-outline";
+          return <Ionicons name={icon} size={size} color={color} />;
         },
       })}
     >
-      {/* 1) Home para todos */}
+      {/* Home siempre visible */}
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: "Home" }} />
 
-      {/* 2) SellPoints solo admin/superadmin (aparece enseguida de Home) */}
+      {/* Vender: sólo admin/superadmin */}
       {isAdmin && (
         <Tab.Screen
           name="SellPoints"
@@ -73,14 +51,15 @@ export default function TabNavigator() {
         />
       )}
 
-      <Tab.Screen name="Configuration" component={ConfigurationScreen} options={{ title: "Configuración" }} />
-
-      {/* 4) Crear Usuario solo para admin/superadmin */}
-      {isAdmin && (
-        <Tab.Screen name="CreateUser" component={CreateUserScreen} options={{ title: "Crear Usuario" }} />
-      )}
-
-      <Tab.Screen name="Logout" component={LogoutScreen} options={{ title: "Cerrar sesión" }} />
+      {/* Configuración: oculta el botón del Tab, pero permite navegar desde el menú */}
+      <Tab.Screen
+        name="Configuration"
+        component={ConfigurationScreen}
+        options={{
+          title: "Configuración",
+          tabBarButton: () => null, // 👈 Oculta del tab bar
+        }}
+      />
     </Tab.Navigator>
   );
 }
