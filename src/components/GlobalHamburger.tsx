@@ -80,7 +80,16 @@ export default function GlobalHamburger({ show = true }: Props) {
     <>
       <Pressable
         onPress={() => setOpen(true)}
-        style={[styles.fab, { top: insets.top + 10 }]}
+        style={[
+          styles.fab,
+          { 
+            top: insets.top + 10,
+            // ↓ cuando está abierto, que no se vea ni interfiera
+            zIndex: open ? 1 : 60,
+            opacity: open ? 0 : 1,
+            pointerEvents: open ? "none" : "auto",
+          }
+        ]}
         accessibilityRole="button"
         accessibilityLabel="Abrir menú"
       >
@@ -162,7 +171,7 @@ function MenuItem({
 const styles = StyleSheet.create({
   fab: {
     position: "absolute",
-    right: 14,
+    left: 14,
     zIndex: 50,
     height: 36, width: 36, borderRadius: 18,
     backgroundColor: "#fff", justifyContent: "center", alignItems: "center",

@@ -1,17 +1,17 @@
+// src/navigation/TabNavigator.tsx
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 
 import HomeScreen from "../screens/HomeScreen";
-import ConfigurationScreen from "../screens/ConfigurationScreen";
 import SellPointsScreen from "../screens/SellPointsScreen";
+import NotificationsScreen from "../screens/NotificationsScreen";
 import { useAuth } from "../presentation/context/AuthContext";
 
 export type TabParamList = {
   Home: undefined;
   SellPoints: undefined;
-  Configuration: undefined; 
-   CreateUser: undefined;
+  Promotions: undefined;
 };
 
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -29,20 +29,32 @@ export default function TabNavigator() {
         headerShown: false,
         tabBarActiveTintColor: "#1D4ED8",
         tabBarInactiveTintColor: "gray",
+        // Reparte el ancho de forma pareja entre los tabs visibles
+        tabBarItemStyle: { flex: 1 },
         tabBarStyle: { backgroundColor: "white", paddingVertical: 8 },
+        tabBarLabelStyle: { fontSize: 12 },
+        tabBarIconStyle: { marginTop: 2 },
         tabBarIcon: ({ focused, color, size }) => {
-          let icon: keyof typeof Ionicons.glyphMap = "ellipse";
-          if (route.name === "Home") icon = focused ? "home" : "home-outline";
-          if (route.name === "SellPoints") icon = focused ? "cash" : "cash-outline";
-          if (route.name === "Configuration") icon = focused ? "settings" : "settings-outline";
+          let icon: keyof typeof Ionicons.glyphMap;
+          switch (route.name) {
+            case "Home":
+              icon = focused ? "home" : "home-outline";
+              break;
+            case "SellPoints":
+              icon = focused ? "cash" : "cash-outline";
+              break;
+            case "Promotions":
+              // puedes cambiar por "gift" / "megaphone"
+              icon = focused ? "pricetags" : "pricetags-outline";
+              break;
+            default:
+              icon = "ellipse";
+          }
           return <Ionicons name={icon} size={size} color={color} />;
         },
       })}
     >
-      {/* Home siempre visible */}
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: "Home" }} />
-
-      {/* Vender: sólo admin/superadmin */}
       {isAdmin && (
         <Tab.Screen
           name="SellPoints"
@@ -50,16 +62,12 @@ export default function TabNavigator() {
           options={{ title: "Vender" }}
         />
       )}
-
-      {/* Configuración: oculta el botón del Tab, pero permite navegar desde el menú */}
       <Tab.Screen
-        name="Configuration"
-        component={ConfigurationScreen}
-        options={{
-          title: "Configuración",
-          tabBarButton: () => null, // 👈 Oculta del tab bar
-        }}
+        name="Promotions"
+        component={NotificationsScreen}
+        options={{ title: "Promociones" }}
       />
+      
     </Tab.Navigator>
   );
 }
