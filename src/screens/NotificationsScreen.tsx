@@ -121,7 +121,6 @@ export default function NotificationsScreen() {
       setHasNext(!!paged?.hasNext);
       setPage(nextPage);
     } catch (e) {
-      console.log("[Promos] error:", e);
     } finally {
       pendingRef.current = false;
       isRefresh ? setRefreshing(false) : setLoading(false);

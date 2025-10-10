@@ -1,3 +1,4 @@
+// src/components/GlobalHamburger.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, BackHandler, Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -13,22 +14,40 @@ type Props = { show?: boolean };
 
 export default function GlobalHamburger({ show = true }: Props) {
   const { user } = useAuth();
-  const role = (user?.role ?? "").toUpperCase();
-  const isAdmin = role === "ADMIN" || role === "SUPERADMIN";
+  const isAdmin = (user?.role ?? "").toUpperCase() === "ADMIN" || (user?.role ?? "").toUpperCase() === "SUPERADMIN";
 
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
 
   const [open, setOpen] = useState(false);
-  const anim = useRef(new Animated.Value(0)).current;
 
   const width = Dimensions.get("window").width;
   const drawerWidth = Math.min(width * 0.8, 320);
 
-  useEffect(() => {
-    Animated.timing(anim, { toValue: open ? 1 : 0, duration: 220, useNativeDriver: true }).start();
-  }, [open, anim]);
+  // ⬇️ Usamos una Animated.Value en píxeles, empezando cerrada
+  const tx = useRef(new Animated.Value(-drawerWidth)).current;
 
+  // ⬇️ Si cambia el ancho (rotación, primer render), asegúrate de estar oculto
+  useEffect(() => {
+    tx.setValue(-drawerWidth);
+  }, [drawerWidth, tx]);
+
+  // ⬇️ Al cambiar `open`, animamos a 0 (abierto) o -drawerWidth (cerrado)
+  useEffect(() => {
+    Animated.timing(tx, {
+      toValue: open ? 0 : -drawerWidth,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  }, [open, drawerWidth, tx]);
+
+  // ⬇️ Siempre arranca cerrado al entrar un usuario / re-login
+  useEffect(() => {
+    setOpen(false);
+    tx.setValue(-drawerWidth);
+  }, [user?.telefono, drawerWidth, tx]);
+
+  // Back button cierra el cajón
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
       if (open) {
@@ -46,24 +65,22 @@ export default function GlobalHamburger({ show = true }: Props) {
       {
         width: drawerWidth,
         paddingTop: insets.top + 12,
-        transform: [
-          {
-            translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [-drawerWidth, 0] }),
-          },
-        ],
+        transform: [{ translateX: tx }],
+        // Ocúltalo completamente para evitar parpadeo mientras está cerrado
+        opacity: open ? 1 : 0.999, // evita artefactos con useNativeDriver
       },
     ],
-    [anim, drawerWidth, insets.top]
-  );
-  const overlayStyle = useMemo(
-    () => [styles.overlay, { opacity: anim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.28] }) }],
-    [anim]
+    [drawerWidth, insets.top, tx, open]
   );
 
-  // Navegación
+  const overlayStyle = useMemo(
+    () => [styles.overlay, { opacity: open ? 0.28 : 0 }],
+    [open]
+  );
+
   const goTab = (screen: keyof TabParamList) => {
     setOpen(false);
-    navigation.navigate("Tabs", { screen }); // ya está tipado con NavigatorScreenParams
+    navigation.navigate("Tabs", { screen });
   };
   const goCreateUser = () => {
     setOpen(false);
@@ -82,13 +99,12 @@ export default function GlobalHamburger({ show = true }: Props) {
         onPress={() => setOpen(true)}
         style={[
           styles.fab,
-          { 
+          {
             top: insets.top + 10,
-            // ↓ cuando está abierto, que no se vea ni interfiera
             zIndex: open ? 1 : 60,
             opacity: open ? 0 : 1,
             pointerEvents: open ? "none" : "auto",
-          }
+          },
         ]}
         accessibilityRole="button"
         accessibilityLabel="Abrir menú"
@@ -117,9 +133,7 @@ export default function GlobalHamburger({ show = true }: Props) {
             </View>
             <View style={{ marginLeft: 10, flex: 1 }}>
               <Text numberOfLines={1} style={styles.title}>{user?.nombre ?? "Mi cuenta"}</Text>
-              {!!user?.telefono && (
-                <Text numberOfLines={1} style={styles.subtitle}>{user.telefono}</Text>
-              )}
+              {!!user?.telefono && <Text numberOfLines={1} style={styles.subtitle}>{user.telefono}</Text>}
             </View>
             <Pressable onPress={() => setOpen(false)} style={styles.closeBtn}>
               <MaterialCommunityIcons name="chevron-left" size={22} color="#1D4ED8" />
@@ -136,7 +150,14 @@ export default function GlobalHamburger({ show = true }: Props) {
             <MenuItem icon="account-plus-outline" label="Crear usuario" onPress={goCreateUser} />
           )}
 
-          <MenuItem icon="cog-outline" label="Configuración" onPress={() => goTab("Configuration")} />
+          <MenuItem
+            icon="cog-outline"
+            label="Configuración"
+            onPress={() => {
+              setOpen(false);
+              navigation.navigate("Configuration"); // stack
+            }}
+          />
         </View>
 
         <View style={[styles.bottom, { paddingBottom: insets.bottom + 12 }]}>

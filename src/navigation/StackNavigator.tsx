@@ -1,3 +1,4 @@
+// src/navigation/StackNavigator.tsx
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { NavigatorScreenParams } from "@react-navigation/native";
@@ -8,12 +9,12 @@ import TabNavigator, { TabParamList } from "./TabNavigator";
 import BusinessDetailScreen from "../screens/BusinessDetailScreen";
 import CreateUserScreen from "../screens/CreateUserScreen";
 import LogoutScreen from "../screens/LogoutScreen";
+import ConfigurationScreen from "../screens/ConfigurationScreen";
 import { useAuth } from "../presentation/context/AuthContext";
 
 export type RootStackParamList = {
   Login: { fromRegister?: boolean; registeredPhone?: string } | undefined;
   Register: undefined;
-  // 👇 Ahora Tabs acepta navegación anidada correctamente
   Tabs: NavigatorScreenParams<TabParamList> | undefined;
   BusinessDetail: {
     business: {
@@ -28,9 +29,9 @@ export type RootStackParamList = {
       descripcion?: string | null;
     };
   };
-  // 👇 Agregadas como pantallas del Stack
   CreateUser: undefined;
   Logout: undefined;
+  Configuration: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -47,6 +48,7 @@ export default function StackNavigator() {
           <Stack.Screen name="BusinessDetail" component={BusinessDetailScreen} />
           <Stack.Screen name="CreateUser" component={CreateUserScreen} />
           <Stack.Screen name="Logout" component={LogoutScreen} />
+          <Stack.Screen name="Configuration" component={ConfigurationScreen} />
         </>
       ) : (
         <>

@@ -29,45 +29,28 @@ export default function TabNavigator() {
         headerShown: false,
         tabBarActiveTintColor: "#1D4ED8",
         tabBarInactiveTintColor: "gray",
-        // Reparte el ancho de forma pareja entre los tabs visibles
-        tabBarItemStyle: { flex: 1 },
-        tabBarStyle: { backgroundColor: "white", paddingVertical: 8 },
-        tabBarLabelStyle: { fontSize: 12 },
+        tabBarHideOnKeyboard: true,
+
+        // distribución pareja y centrada
+        tabBarItemStyle: { flex: 1, alignItems: "center" },
+        tabBarStyle: { backgroundColor: "white", paddingVertical: 6, justifyContent: "space-around" },
+        tabBarLabelStyle: { fontSize: 12, marginBottom: 2 },
         tabBarIconStyle: { marginTop: 2 },
+
         tabBarIcon: ({ focused, color, size }) => {
-          let icon: keyof typeof Ionicons.glyphMap;
-          switch (route.name) {
-            case "Home":
-              icon = focused ? "home" : "home-outline";
-              break;
-            case "SellPoints":
-              icon = focused ? "cash" : "cash-outline";
-              break;
-            case "Promotions":
-              // puedes cambiar por "gift" / "megaphone"
-              icon = focused ? "pricetags" : "pricetags-outline";
-              break;
-            default:
-              icon = "ellipse";
-          }
-          return <Ionicons name={icon} size={size} color={color} />;
+          let icon: keyof typeof Ionicons.glyphMap = "ellipse";
+          if (route.name === "Home")       icon = focused ? "home"      : "home-outline";
+          if (route.name === "SellPoints") icon = focused ? "cash"      : "cash-outline";
+          if (route.name === "Promotions") icon = focused ? "pricetags" : "pricetags-outline";
+          return <Ionicons name={icon} size={20} color={color} />;
         },
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: "Home" }} />
       {isAdmin && (
-        <Tab.Screen
-          name="SellPoints"
-          component={SellPointsScreen}
-          options={{ title: "Vender" }}
-        />
+        <Tab.Screen name="SellPoints" component={SellPointsScreen} options={{ title: "Vender" }} />
       )}
-      <Tab.Screen
-        name="Promotions"
-        component={NotificationsScreen}
-        options={{ title: "Promociones" }}
-      />
-      
+      <Tab.Screen name="Promotions" component={NotificationsScreen} options={{ title: "Promociones" }} />
     </Tab.Navigator>
   );
 }
