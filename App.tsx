@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AuthProvider } from "./src/presentation/context/AuthContext";
 import StackNavigator from "./src/navigation/StackNavigator";
 import GlobalHamburger from "./src/components/GlobalHamburger";
+import Toast from "react-native-toast-message";
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
             <GlobalHamburger />
             <StackNavigator />
           </NavigationContainer>
+          <Toast position="top" />
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

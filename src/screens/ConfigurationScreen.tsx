@@ -273,34 +273,6 @@ export default function ConfigurationScreen() {
                 </Text>
               )}
 
-              {/* Toggle notificaciones (visual) */}
-              <Pressable
-                onPress={() => setNotif((v) => !v)}
-                className="flex-row items-center mt-5 active:opacity-80"
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: notif }}
-                accessibilityLabel="Recibir notificaciones de tus negocios"
-              >
-                <View
-                  className={`h-6 w-6 mr-3 rounded-lg border items-center justify-center ${
-                    notif ? "bg-blue-600 border-blue-600" : "bg-white border-gray-300"
-                  }`}
-                >
-                  {notif ? (
-                    <MaterialCommunityIcons
-                      name="check-bold"
-                      size={16}
-                      color="#fff"
-                    />
-                  ) : (
-                    <View className="h-3 w-3" />
-                  )}
-                </View>
-                <Text className="text-gray-800">
-                  Recibir notificaciones de tus negocios
-                </Text>
-              </Pressable>
-
               {/* Guardar */}
               <Pressable
                 onPress={handleSave}

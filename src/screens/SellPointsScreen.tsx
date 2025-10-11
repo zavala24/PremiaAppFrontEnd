@@ -221,7 +221,12 @@ export default function SellPointsScreen() {
   const handleLookup = async () => {
     const p = onlyDigits(phone);
     if (p.length < 10) {
-      Alert.alert("Teléfono inválido", "Ingresa 10 dígitos.");
+      Toast.show({
+        type: "error",
+        text1: "Teléfono inválido, ingresa 10 dígitos.",
+        position: "top",
+        visibilityTime: 2000,
+      });
       return;
     }
 
@@ -290,15 +295,31 @@ export default function SellPointsScreen() {
     }
     const p = onlyDigits(phone);
     if (p.length !== 10) {
-      Alert.alert("Teléfono inválido", "Ingresa 10 dígitos.");
+      Toast.show({
+        type: "error",
+        text1: "Teléfono inválido, ingresa 10 dígitos.",
+        position: "top",
+        visibilityTime: 2000,
+      });
       return;
     }
     if (!(amountNumber > 0)) {
-      Alert.alert("Monto inválido", "El monto debe ser mayor a 0.");
+
+        Toast.show({
+        type: "error",
+        text1: "Monto inválido, el monto debe ser mayor a 0.",
+        position: "top",
+        visibilityTime: 2000,
+      });
       return;
     }
     if (!businessId) {
-      Alert.alert("Negocio no disponible", "Vuelve a intentar más tarde.");
+      Toast.show({
+        type: "error",
+        text1: "Negocio no disponible.",
+        position: "top",
+        visibilityTime: 2000,
+      });
       return;
     }
 
@@ -321,7 +342,13 @@ export default function SellPointsScreen() {
 
       const { resp, result } = await sellService.insertSellByUserPhoneNumber(payload);
       if (!resp.success) {
-        Alert.alert("Error", resp.message || "No se pudo registrar la venta.");
+        Toast.show({
+          type: "error",
+          text1: "No se pudo registrar la venta.",
+          position: "top",
+          visibilityTime: 2000,
+        });
+
         return;
       }
 
@@ -354,7 +381,12 @@ export default function SellPointsScreen() {
       if (waTimerRef.current) clearTimeout(waTimerRef.current);
       waTimerRef.current = setTimeout(() => setWaModalVisible(true), 2000);
     } catch (e: any) {
-      Alert.alert("Error", e?.message || "Falló el registro de la venta.");
+              Toast.show({
+          type: "error",
+          text1: "Falló el registro de venta.",
+          position: "top",
+          visibilityTime: 2000,
+        })
     } finally {
       setLoadingSubmit(false);
     }

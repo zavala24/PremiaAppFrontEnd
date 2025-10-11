@@ -18,13 +18,12 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 import { useAuth } from "../presentation/context/AuthContext";
 
-// Dominio/servicio (asegúrate de que estos paths coincidan en tu repo)
+// Dominio/servicio
 import { AppNotification } from "../domain/entities/AppNotification";
 import { NotificationsService } from "../application/services/NotificationsService";
 import { NotificationsRepository } from "../infrastructure/repositories/NotificationsRepository";
 import { INotificationsService } from "../application/interfaces/InotificationsService";
 
-// ==== Styled bindings ====
 const View = styled(RNView);
 const Text = styled(RNText);
 const TextInput = styled(RNTextInput);
@@ -41,14 +40,14 @@ type GroupByBusiness = {
 };
 
 type SectionByDate = {
-  dateKey: string; // YYYY-MM-DD
+  dateKey: string;   // YYYY-MM-DD
   dateLabel: string; // ej. 10 oct 2025
   groups: GroupByBusiness[];
 };
 
-// Helpers
 const fmtDateLabel = (iso: string) => {
   const d = new Date(iso);
+  // “10 oct 2025”
   return d.toLocaleDateString("es-MX", {
     year: "numeric",
     month: "short",
@@ -70,7 +69,7 @@ export default function NotificationsScreen() {
     new NotificationsService(new NotificationsRepository())
   ).current;
 
-  // Estado principal (NOTA: ahora usamos AppNotification)
+  // Estado
   const [items, setItems] = useState<AppNotification[]>([]);
   const [page, setPage] = useState(1);
   const [hasNext, setHasNext] = useState(true);
@@ -82,7 +81,7 @@ export default function NotificationsScreen() {
   const [localQuery, setLocalQuery] = useState("");
   const [query, setQuery] = useState<string | undefined>(undefined);
 
-  // Debounce del buscador
+  // Debounce
   useEffect(() => {
     const t = setTimeout(() => {
       const q = localQuery.trim();
@@ -93,7 +92,7 @@ export default function NotificationsScreen() {
     return () => clearTimeout(t);
   }, [localQuery]);
 
-  // Cargar 1 página
+  // Cargar página
   const pendingRef = useRef(false);
   const loadPage = async (nextPage: number, isRefresh = false) => {
     if (pendingRef.current || !hasNext) return;
@@ -111,16 +110,12 @@ export default function NotificationsScreen() {
         search: query,
       });
 
-      // Esperamos ServiceResponse<Paged<AppNotification>>
       const paged = resp.data;
       const newItems: AppNotification[] = paged?.items ?? [];
 
-      setItems((prev) =>
-        nextPage === 1 ? newItems : [...prev, ...newItems]
-      );
+      setItems((prev) => (nextPage === 1 ? newItems : [...prev, ...newItems]));
       setHasNext(!!paged?.hasNext);
       setPage(nextPage);
-    } catch (e) {
     } finally {
       pendingRef.current = false;
       isRefresh ? setRefreshing(false) : setLoading(false);
@@ -128,7 +123,7 @@ export default function NotificationsScreen() {
     }
   };
 
-  // Inicial + cuando cambia query
+  // Inicial + cambios de query/teléfono
   useEffect(() => {
     setHasNext(true);
     loadPage(1, true);
@@ -142,15 +137,14 @@ export default function NotificationsScreen() {
     if (hasNext && !loading && !initialLoading) loadPage(page + 1);
   };
 
-  // Agrupación: fecha → negocio
+  // Agrupar: fecha → negocio
   const sections: SectionByDate[] = useMemo(() => {
-    // ordenar desc por fecha
     const sorted = [...items].sort(
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 
-    const map = new Map<string, SectionByDate>(); // dateKey -> section
+    const map = new Map<string, SectionByDate>();
 
     for (const it of sorted) {
       const dk = ymd(it.createdAt);
@@ -175,25 +169,17 @@ export default function NotificationsScreen() {
       group.items.push(it);
     }
 
-    // dentro de cada día, ordenar grupos por nombre
     const arr = Array.from(map.values());
     for (const s of arr) {
       s.groups.sort((a, b) =>
         a.negocioNombre.localeCompare(b.negocioNombre, "es-MX")
       );
     }
-    // ordenar días desc (ya vienen así por la ordenación de items, pero aseguramos)
     arr.sort((a, b) => (a.dateKey > b.dateKey ? -1 : 1));
     return arr;
   }, [items]);
 
-  // Render UI
-  const SectionHeader = ({ label }: { label: string }) => (
-    <View className="mt-4 mb-2">
-      <Text className="text-xs font-bold text-blue-900/70">{label}</Text>
-    </View>
-  );
-
+  // UI helpers
   const BusinessHeader = ({
     name,
     url,
@@ -201,19 +187,12 @@ export default function NotificationsScreen() {
     name: string;
     url?: string | null;
   }) => (
-    <View className="flex-row items-center mt-2 mb-1">
+    <View className="flex-row items-center mt-3 mb-1">
       {url ? (
-        <Image
-          source={{ uri: url }}
-          className="h-8 w-8 rounded-full bg-blue-50"
-        />
+        <Image source={{ uri: url }} className="h-8 w-8 rounded-full bg-blue-50" />
       ) : (
         <View className="h-8 w-8 rounded-full bg-blue-50 items-center justify-center">
-          <MaterialCommunityIcons
-            name="storefront-outline"
-            size={18}
-            color="#2563EB"
-          />
+          <MaterialCommunityIcons name="storefront-outline" size={18} color="#2563EB" />
         </View>
       )}
       <Text className="ml-2 text-[13px] font-extrabold text-slate-900">
@@ -223,13 +202,36 @@ export default function NotificationsScreen() {
   );
 
   const NotificationItem = ({ it }: { it: AppNotification }) => (
-    <View className="p-3 rounded-xl bg-white border border-blue-100 mt-1">
-      <Text className="text-[12px] font-bold text-blue-800">
-        {it.title}
-      </Text>
-      <Text className="text-[12px] text-slate-600 mt-1">
-        {it.body}
-      </Text>
+    <View className="p-3 rounded-xl bg-white border border-blue-100 mt-2">
+      <Text className="text-[12.5px] font-bold text-blue-800">{it.title}</Text>
+      <Text className="text-[12px] text-slate-600 mt-1">{it.body}</Text>
+    </View>
+  );
+
+  // Tarjeta por fecha
+  const DateSectionCard = ({ section }: { section: SectionByDate }) => (
+    <View className="mt-4">
+      <View className="rounded-2xl border border-blue-100 bg-blue-50/40 shadow-sm">
+        {/* Encabezado del card (fecha) */}
+        <View className="px-4 py-3 border-b border-blue-100 flex-row items-center">
+          <MaterialCommunityIcons name="calendar-blank-outline" size={18} color="#1D4ED8" />
+          <Text className="ml-2 text-[15px] font-extrabold text-blue-900">
+            {section.dateLabel}
+          </Text>
+        </View>
+
+        {/* Contenido del día */}
+        <View className="px-4 pb-4 pt-1">
+          {section.groups.map((g, idx) => (
+            <View key={`${section.dateKey}-${g.negocioNombre}-${idx}`}>
+              <BusinessHeader name={g.negocioNombre} url={g.urlLogo} />
+              {g.items.map((n) => (
+                <NotificationItem key={n.id} it={n} />
+              ))}
+            </View>
+          ))}
+        </View>
+      </View>
     </View>
   );
 
@@ -246,9 +248,7 @@ export default function NotificationsScreen() {
           {/* Header */}
           <View className="items-center mb-1">
             <MaterialCommunityIcons name="tag-outline" size={24} color="#1D4ED8" />
-            <Text className="text-3xl font-black text-blue-700 mt-1">
-              Promociones
-            </Text>
+            <Text className="text-3xl font-black text-blue-700 mt-1">Promociones</Text>
             <Text className="text-slate-500 text-center mt-1">
               Ofertas y anuncios de los negocios que sigues
             </Text>
@@ -265,24 +265,18 @@ export default function NotificationsScreen() {
               className="flex-1 ml-2 text-base text-slate-800 py-0"
               style={{
                 paddingVertical: 0,
-                ...(Platform.OS === "android"
-                  ? { textAlignVertical: "center" as const }
-                  : null),
+                ...(Platform.OS === "android" ? { textAlignVertical: "center" as const } : null),
               }}
               returnKeyType="search"
             />
             {!!localQuery && (
               <Pressable onPress={() => setLocalQuery("")} className="pl-2">
-                <MaterialCommunityIcons
-                  name="close-circle-outline"
-                  size={18}
-                  color="#9CA3AF"
-                />
+                <MaterialCommunityIcons name="close-circle-outline" size={18} color="#9CA3AF" />
               </Pressable>
             )}
           </View>
 
-          {/* Lista */}
+          {/* Lista por días (cada día = card) */}
           <View className="flex-1 mt-4">
             {initialLoading ? (
               <View className="flex-1 items-center justify-center">
@@ -293,41 +287,19 @@ export default function NotificationsScreen() {
               <FlatList
                 data={sections}
                 keyExtractor={(s) => s.dateKey}
-                renderItem={({ item: section }) => (
-                  <View>
-                    <SectionHeader label={section.dateLabel} />
-                    {section.groups.map((g, idx) => (
-                      <View key={`${section.dateKey}-${g.negocioNombre}-${idx}`}>
-                        <BusinessHeader name={g.negocioNombre} url={g.urlLogo} />
-                        {g.items.map((n) => (
-                          <NotificationItem key={n.id} it={n} />
-                        ))}
-                      </View>
-                    ))}
-                  </View>
-                )}
+                renderItem={({ item }) => <DateSectionCard section={item} />}
                 contentContainerStyle={{ paddingBottom: 8 + insets.bottom }}
                 showsVerticalScrollIndicator={false}
                 onEndReached={hasNext ? onEndReached : undefined}
                 onEndReachedThreshold={0.35}
                 keyboardShouldPersistTaps="handled"
                 refreshControl={
-                  <RefreshControl
-                    refreshing={refreshing}
-                    onRefresh={onRefresh}
-                    tintColor="#1D4ED8"
-                  />
+                  <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1D4ED8" />
                 }
                 ListEmptyComponent={
                   <View className="items-center mt-16">
-                    <MaterialCommunityIcons
-                      name="tag-off-outline"
-                      size={36}
-                      color="#93C5FD"
-                    />
-                    <Text className="text-blue-800/70 mt-2">
-                      No hay promociones por ahora
-                    </Text>
+                    <MaterialCommunityIcons name="tag-off-outline" size={36} color="#93C5FD" />
+                    <Text className="text-blue-800/70 mt-2">No hay promociones por ahora</Text>
                   </View>
                 }
                 ListFooterComponent={
