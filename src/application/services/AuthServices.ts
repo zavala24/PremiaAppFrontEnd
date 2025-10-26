@@ -20,8 +20,7 @@ export class AuthService {
   > {
 
     const res = await this.repo.login(phoneNumber, password);
-
-    if (res.status === 200 && res.token && res.user) {
+    if (res.status === 200 && res.token) {
       const role: Role = res.role ?? "User";
 
       const user: User = {

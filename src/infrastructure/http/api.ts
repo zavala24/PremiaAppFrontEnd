@@ -1,7 +1,7 @@
 // src/http/api.ts
 import axios, { AxiosError } from "axios";
 
-const BASE_URL = "http://192.168.1.15:5137/api";
+const BASE_URL = "http://192.168.1.17:5137/api";
 
 const create = () => {
   const i = axios.create({

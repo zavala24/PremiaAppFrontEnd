@@ -139,7 +139,7 @@ export default function LoginScreen() {
         await login(result.user, result.token);
         navigation.replace("Tabs");
       } else {
-              console.log("RESULT", result)
+
         Toast.show({
           type: "error",
           text1: result.message || "Error al iniciar sesión",
