@@ -22,7 +22,7 @@ import { useAuth } from "../presentation/context/AuthContext";
 import { AppNotification } from "../domain/entities/AppNotification";
 import { NotificationsService } from "../application/services/NotificationsService";
 import { NotificationsRepository } from "../infrastructure/repositories/NotificationsRepository";
-import { INotificationsService } from "../application/interfaces/InotificationsService";
+import { INotificationsService } from "../application/interfaces/INotificationsService";
 
 const View = styled(RNView);
 const Text = styled(RNText);
@@ -141,17 +141,17 @@ export default function NotificationsScreen() {
   const sections: SectionByDate[] = useMemo(() => {
     const sorted = [...items].sort(
       (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        new Date(b.creadoCuando).getTime() - new Date(a.creadoCuando).getTime()
     );
 
     const map = new Map<string, SectionByDate>();
 
     for (const it of sorted) {
-      const dk = ymd(it.createdAt);
+      const dk = ymd(it.creadoCuando);
       if (!map.has(dk)) {
         map.set(dk, {
           dateKey: dk,
-          dateLabel: fmtDateLabel(it.createdAt),
+          dateLabel: fmtDateLabel(it.creadoCuando),
           groups: [],
         });
       }

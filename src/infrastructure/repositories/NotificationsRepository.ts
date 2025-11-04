@@ -28,7 +28,7 @@ const mapApiNotification = (n: any): AppNotification => ({
   title: n.titulo,
   body: n.cuerpo,
   logoUrl: n.urlLogo ?? null,
-  createdAt: n.creadoCuando,        // ISO string
+  creadoCuando: n.creadoCuando,        // ISO string
   businessName: n.negocioNombre ?? n.nombreNegocio ?? "", // el backend debe enviarlo
 });
 

@@ -5,6 +5,6 @@ export type AppNotification = {
   title: string;
   body: string;
   logoUrl: string | null;
-  createdAt: string;      
+  creadoCuando: string;      
   businessName: string;   
 };

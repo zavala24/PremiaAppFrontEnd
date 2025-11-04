@@ -3,7 +3,8 @@ import { INotificationsRepository } from "../../domain/repositories/INotificatio
 import { ServiceResponse } from "../../domain/dto/ServiceResponse";
 import { Paged } from "../../domain/dto/Pagination";
 import { AppNotification } from "../../domain/entities/AppNotification";
-import { INotificationsService, NotificationsQuery } from "../interfaces/InotificationsService";
+import { INotificationsService, NotificationsQuery } from "../interfaces/INotificationsService";
+
 
 export class NotificationsService implements INotificationsService {
   constructor(private readonly repo: INotificationsRepository) {}
