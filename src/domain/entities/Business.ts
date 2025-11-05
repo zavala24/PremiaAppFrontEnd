@@ -3,10 +3,11 @@ export interface BusinessConfig {
   porcentajeVentas: number;    
   urlLogo?: string | null;
   activo: boolean;
+  permitirConfiguracionPersonalizada?: boolean;
 }
 
 export interface Business {
-  id: number;
+  idNegocio: number;
   name: string;
   category?: string | null;
   facebook?: string | null;

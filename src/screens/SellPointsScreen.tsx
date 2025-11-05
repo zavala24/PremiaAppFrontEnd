@@ -28,11 +28,29 @@ import { IBusinessService } from "../application/interfaces/IBusinessService";
 import { UserService } from "../application/services/UserServices";
 import { UserRepository } from "../infrastructure/repositories/UserRepository";
 import { IUserService } from "../application/interfaces/IUserServices";
+
 import { SellRepository } from "../infrastructure/repositories/SellRepository";
 import { SellService } from "../application/services/SellServices";
 import { ISellService } from "../application/interfaces/ISellService";
 import { InsertSellPayload } from "../domain/entities/Sell";
+
 import Toast from "react-native-toast-message";
+
+/* === NEW: productos custom === */
+import {
+  ProductosCustomRepository
+} from "../infrastructure/repositories/ProductosCustomRepository";
+import {
+  ProductosCustomService
+} from "../application/services/ProductosCustomService";
+import type {
+  IProductosCustomService
+} from "../application/interfaces/IProductosCustomService";
+import type {
+  ProductoCustom,
+  AcumularProgresoCustomRequest,
+  CanjearProgresoCustomRequest
+} from "../application/interfaces/IProductosCustomService";
 
 const View = styled(RNView);
 const Text = styled(RNText);
@@ -139,7 +157,7 @@ export default function SellPointsScreen() {
   const [bizLoading, setBizLoading] = useState(true);
   const [bizError, setBizError] = useState<string | null>(null);
   const [business, setBusiness] = useState<Business | null>(null);
-  const businessId = business?.id ?? 0;
+  const businessId = business?.idNegocio ?? 0;
   const bizLogoUrl = business?.configuracion?.urlLogo ?? undefined;
 
   // ======== Estado de CLIENTE / Venta ========
@@ -178,6 +196,29 @@ export default function SellPointsScreen() {
   const repository = new SellRepository();
   const sellService: ISellService = new SellService(repository);
 
+  /* === NEW: productos custom service === */
+  const productosService: IProductosCustomService = new ProductosCustomService(
+    new ProductosCustomRepository()
+  );
+
+  // === NEW: estado de UI para custom products ===
+  const permitirCustom = business?.configuracion?.permitirConfiguracionPersonalizada === true;
+  const [customProducts, setCustomProducts] = useState<ProductoCustom[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+
+  const [selectedProduct, setSelectedProduct] = useState<ProductoCustom | null>(null);
+  const [productPickerOpen, setProductPickerOpen] = useState(false);
+
+  // ⬇️ Cantidad: SIEMPRE visible
+  const [qty, setQty] = useState<string>("1");
+  const qtyNumber = useMemo(() => {
+    const n = Number(qty);
+    return Number.isFinite(n) && n > 0 ? n : 1;
+  }, [qty]);
+
+  // acción: acumular o canjear
+  const [actionType, setActionType] = useState<"acumular" | "canjear" | null>(null);
+
   // Cargar negocio
   useEffect(() => {
     let mounted = true;
@@ -189,6 +230,7 @@ export default function SellPointsScreen() {
           return;
         }
         const res = await businessService.getNegocioConfigByTelefono(user.telefono);
+        console.log("REEEEEEEs",res.data.configuracion)
         if (!mounted) return;
         if (res.status !== 200 || !res.data) {
           setBizError(res.message || "No fue posible obtener el negocio.");
@@ -209,6 +251,31 @@ export default function SellPointsScreen() {
     };
   }, [user?.telefono]);
 
+  // Cargar productos custom si está habilitado
+  useEffect(() => {
+    const usuarioNombre =
+      (user as any)?.usuarioNombre || (user as any)?.username || user?.telefono || "";
+    if (!permitirCustom || !usuarioNombre) {
+      setCustomProducts([]);
+      setSelectedProduct(null);
+      setActionType(null);
+      return;
+    }
+    (async () => {
+      try {
+        setLoadingProducts(true);
+        const { resp, data } = await productosService.getProductosByNegocio(businessId);
+        if (resp.status === 200 && Array.isArray(data))
+          setCustomProducts(data.filter((p) => p.estado));
+        else setCustomProducts([]);
+      } catch {
+        setCustomProducts([]);
+      } finally {
+        setLoadingProducts(false);
+      }
+    })();
+  }, [permitirCustom, user?.telefono]);
+
   // Números / cálculos
   const amountNumber = useMemo(
     () => Number((amount || "0").replace(",", ".")) || 0,
@@ -217,7 +284,7 @@ export default function SellPointsScreen() {
   const applied = wantsRedeem ? Math.min(customerBalance, amountNumber) : 0;
   const totalAfterRedeem = Math.max(0, amountNumber - applied);
 
-  // ======== Consultar CLIENTE por teléfono ========
+  // Consultar CLIENTE por teléfono
   const handleLookup = async () => {
     const p = onlyDigits(phone);
     if (p.length < 10) {
@@ -235,7 +302,10 @@ export default function SellPointsScreen() {
       setUserValid(null);
 
       const started = Date.now();
-      const { resp, user: u } = await userService.GetUserPuntosByPhoneNumber(p, business?.id ?? 0);
+      const { resp, user: u } = await userService.GetUserPuntosByPhoneNumber(
+        p,
+        business?.idNegocio ?? 0
+      );
       const elapsed = Date.now() - started;
       if (elapsed < MIN_LOOKUP_MS) await sleep(MIN_LOOKUP_MS - elapsed);
 
@@ -259,8 +329,6 @@ export default function SellPointsScreen() {
   };
 
   /* ===== Inputs controlados ===== */
-
-  // TELÉFONO: solo 10 dígitos (bloqueo fuerte)
   const onChangePhone = (v: string) => {
     setPhone((prev) => {
       const digits = sanitizePhone(v);
@@ -270,12 +338,10 @@ export default function SellPointsScreen() {
     setUserValid(null);
   };
 
-  // MONTO: normaliza a 0-9 y un solo punto decimal
   const onChangeAmount = (v: string) => {
     setAmount(sanitizeAmount(v));
   };
 
-  // ===== util: limpiar formulario =====
   const clearForm = () => {
     setPhone("");
     setAmount("");
@@ -285,9 +351,13 @@ export default function SellPointsScreen() {
     setCustomerName(null);
     setCustomerBalance(0);
     setUserValid(null);
+    // NEW
+    setSelectedProduct(null);
+    setActionType(null);
+    setQty("1");
   };
 
-  // Confirmar venta
+  // ====== Submit ======
   const handleSubmit = async () => {
     if (userValid !== true) {
       Alert.alert("Usuario no válido", "Valida el usuario antes de continuar.");
@@ -304,8 +374,7 @@ export default function SellPointsScreen() {
       return;
     }
     if (!(amountNumber > 0)) {
-
-        Toast.show({
+      Toast.show({
         type: "error",
         text1: "Monto inválido, el monto debe ser mayor a 0.",
         position: "top",
@@ -326,18 +395,93 @@ export default function SellPointsScreen() {
     try {
       setLoadingSubmit(true);
 
+      // === NEW: si hay producto seleccionado, primero acumular/canjear ===
+      if (selectedProduct) {
+        const usuarioNombre =
+          (user as any)?.usuarioNombre || (user as any)?.username || user?.telefono || "";
+        if (!usuarioNombre) {
+          Toast.show({
+            type: "error",
+            text1: "No se encontró el usuario para operar la promoción.",
+            position: "top",
+            visibilityTime: 2000,
+          });
+          setLoadingSubmit(false);
+          return;
+        }
+        if (!actionType) {
+          Toast.show({
+            type: "error",
+            text1: "Selecciona si deseas acumular o canjear la promoción.",
+            position: "top",
+            visibilityTime: 2000,
+          });
+          setLoadingSubmit(false);
+          return;
+        }
+
+        // construir request genérico
+        const reqBase = {
+          usuario: usuarioNombre,
+          usuarioOperacion: user?.telefono ?? usuarioNombre,
+          telefonoCliente: p,
+          idProductoCustom: selectedProduct.idProductoCustom,
+          cantidad: qtyNumber,
+          monto: amountNumber,
+          descripcion: description?.trim() || null,
+        };
+
+        if (actionType === "acumular") {
+          const { resp } =
+            await productosService.acumularProgresoCustom(
+              reqBase as AcumularProgresoCustomRequest
+            );
+          if (!resp?.success) {
+            Toast.show({
+              type: "error",
+              text1: resp?.message || "No se pudo acumular el progreso.",
+              position: "top",
+              visibilityTime: 2000,
+            });
+            setLoadingSubmit(false);
+            return;
+          }
+        } else if (actionType === "canjear") {
+          const { resp } =
+            await productosService.canjearProgresoCustom(
+              reqBase as CanjearProgresoCustomRequest
+            );
+          if (!resp?.success) {
+            Toast.show({
+              type: "error",
+              text1: resp?.message || "No se pudo canjear la promoción.",
+              position: "top",
+              visibilityTime: 2000,
+            });
+            setLoadingSubmit(false);
+            return;
+          }
+        }
+      }
+
+      // === Venta normal (igual que antes) ===
       const payload: InsertSellPayload = {
         NegocioId: businessId,
         TelefonoCliente: p,
         CreadoPor: user?.telefono ?? "",
-        Articulo: article.trim() || null,
+        Articulo: article.trim() || (selectedProduct?.nombreProducto ?? null),
         Descripcion: description.trim() || null,
         Monto: amountNumber,
         PuntosAplicados: wantsRedeem,
-        TotalCobrado: totalAfterRedeem,
+        TotalCobrado: Math.max(
+          0,
+          amountNumber -
+            (wantsRedeem ? Math.min(customerBalance, amountNumber) : 0)
+        ),
         SaldoAntes: customerBalance,
         SaldoDespues:
-          customerBalance - (wantsRedeem ? Math.min(customerBalance, amountNumber) : 0),
+          customerBalance -
+          (wantsRedeem ? Math.min(customerBalance, amountNumber) : 0),
       };
 
       const { resp, result } = await sellService.insertSellByUserPhoneNumber(payload);
@@ -348,7 +492,7 @@ export default function SellPointsScreen() {
           position: "top",
           visibilityTime: 2000,
         });
-
+        setLoadingSubmit(false);
         return;
       }
 
@@ -357,15 +501,14 @@ export default function SellPointsScreen() {
       const saldoDespues =
         typeof result?.saldoDespues === "number" ? result.saldoDespues : payload.SaldoDespues;
 
-      // Guardar contexto para el modal
       setWaContext({
         toPhone: p,
         businessName: business?.name ?? "Mi negocio",
         customerName,
-        article,
+        article: payload.Articulo || article,
         amount: amountNumber,
-        applied,
-        total: totalCobrado,
+        applied: wantsRedeem ? Math.min(customerBalance, amountNumber) : 0,
+        total: totalCobrado ?? 0,
         saldoAntes: customerBalance,
         saldoDespues: saldoDespues ?? 0,
       });
@@ -381,12 +524,12 @@ export default function SellPointsScreen() {
       if (waTimerRef.current) clearTimeout(waTimerRef.current);
       waTimerRef.current = setTimeout(() => setWaModalVisible(true), 2000);
     } catch (e: any) {
-              Toast.show({
-          type: "error",
-          text1: "Falló el registro de venta.",
-          position: "top",
-          visibilityTime: 2000,
-        })
+      Toast.show({
+        type: "error",
+        text1: "Falló el registro de venta.",
+        position: "top",
+        visibilityTime: 2000,
+      });
     } finally {
       setLoadingSubmit(false);
     }
@@ -399,13 +542,17 @@ export default function SellPointsScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       {/* Burbujas (fijas) */}
-      <View pointerEvents="none" className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-blue-400/25" />
-      <View pointerEvents="none" className="absolute -bottom-28 -left-28 h-80 w-80 rounded-full bg-blue-800/25" />
+      <View
+        pointerEvents="none"
+        className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-blue-400/25"
+      />
+      <View
+        pointerEvents="none"
+        className="absolute -bottom-28 -left-28 h-80 w-80 rounded-full bg-blue-800/25"
+      />
 
       <Safe className="flex-1 px-4">
-        {/* Card FIJO (como Home), con margen superior para el FAB */}
         <View className="flex-1 bg-white rounded-3xl p-6 border border-blue-100 shadow-2xl mt-16">
-          {/* Scroll SOLO dentro del card */}
           <ScrollView
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
@@ -420,16 +567,28 @@ export default function SellPointsScreen() {
               </View>
             ) : bizError ? (
               <View className="items-center py-4">
-                <MaterialCommunityIcons name="store-alert-outline" size={28} color="#EF4444" />
+                <MaterialCommunityIcons
+                  name="store-alert-outline"
+                  size={28}
+                  color="#EF4444"
+                />
                 <Text className="text-red-600 mt-2 text-center">{bizError}</Text>
               </View>
             ) : (
               <View className="items-center mb-4">
                 <View className="h-24 w-24 rounded-full bg-blue-50 border border-blue-100 overflow-hidden items-center justify-center mb-3">
                   {bizLogoUrl ? (
-                    <Image source={{ uri: bizLogoUrl }} className="h-full w-full" resizeMode="cover" />
+                    <Image
+                      source={{ uri: bizLogoUrl }}
+                      className="h-full w-full"
+                      resizeMode="cover"
+                    />
                   ) : (
-                    <MaterialCommunityIcons name="storefront-outline" size={38} color="#2563EB" />
+                    <MaterialCommunityIcons
+                      name="storefront-outline"
+                      size={38}
+                      color="#2563EB"
+                    />
                   )}
                 </View>
                 <Text className="text-lg font-extrabold text-blue-700">
@@ -439,11 +598,18 @@ export default function SellPointsScreen() {
             )}
 
             {/* Teléfono del CLIENTE */}
-            <Text className="text-gray-500 mb-2">Número de teléfono del cliente (obligatorio)</Text>
+            <Text className="text-gray-500 mb-2">
+              Número de teléfono del cliente (obligatorio)
+            </Text>
 
             {/* Row: icono + input + botón */}
             <View className="flex-row items-center rounded-2xl border border-gray-300 bg-white px-4 py-3">
-              <MaterialCommunityIcons name="phone" size={20} color="#6B7280" style={{ marginRight: 8 }} />
+              <MaterialCommunityIcons
+                name="phone"
+                size={20}
+                color="#6B7280"
+                style={{ marginRight: 8 }}
+              />
               <TextInput
                 value={phone}
                 onChangeText={onChangePhone}
@@ -452,7 +618,9 @@ export default function SellPointsScreen() {
                 className="flex-1 text-base text-gray-800 mr-3"
                 style={{
                   paddingVertical: 0,
-                  ...(Platform.OS === "android" ? { textAlignVertical: "center" as const } : null),
+                  ...(Platform.OS === "android"
+                    ? { textAlignVertical: "center" as const }
+                    : null),
                 }}
                 keyboardType="number-pad"
                 inputMode="numeric"
@@ -464,7 +632,9 @@ export default function SellPointsScreen() {
               />
               <Pressable
                 onPress={handleLookup}
-                className={`ml-3 px-4 py-2 rounded-xl ${loadingLookup ? "bg-blue-200" : "bg-blue-600"} shrink-0`}
+                className={`ml-3 px-4 py-2 rounded-xl ${
+                  loadingLookup ? "bg-blue-200" : "bg-blue-600"
+                } shrink-0`}
                 disabled={loadingLookup || !!bizError || bizLoading}
               >
                 {loadingLookup ? (
@@ -475,7 +645,6 @@ export default function SellPointsScreen() {
               </Pressable>
             </View>
 
-            {/* Indicador "Buscando…" */}
             {loadingLookup && (
               <View className="flex-row items-center mt-2 px-3 py-2 rounded-xl bg-blue-50 border border-blue-100">
                 <MaterialCommunityIcons name="magnify" size={18} color="#2563EB" />
@@ -485,14 +654,12 @@ export default function SellPointsScreen() {
               </View>
             )}
 
-            {/* Estado de validación */}
             {userValid !== null && !loadingLookup && (
               <Text className={`mt-2 ${userValid ? "text-green-600" : "text-red-600"}`}>
                 {userValid ? "Usuario válido" : "Usuario no válido"}
               </Text>
             )}
 
-            {/* Info breve del cliente */}
             {customerName && userValid && !loadingLookup && (
               <View className="bg-blue-50 border border-blue-100 rounded-2xl p-3 mt-3">
                 <Text className="text-blue-900 font-semibold">{customerName}</Text>
@@ -500,6 +667,90 @@ export default function SellPointsScreen() {
                   Saldo disponible:{" "}
                   <Text className="font-semibold">{currency(customerBalance)}</Text>
                 </Text>
+              </View>
+            )}
+
+            {/* === Promoción personalizada (opcional) === */}
+            {permitirCustom && (
+              <View className="mt-5">
+                <Text className="text-gray-500 mb-2">Promoción personalizada (opcional)</Text>
+
+                {/* Dropdown "fake": press -> modal con lista */}
+                <Pressable
+                  onPress={() => setProductPickerOpen(true)}
+                  className="rounded-2xl border border-gray-300 bg-white px-4 py-3 flex-row items-center justify-between"
+                >
+                  <View className="flex-1 flex-row items-center justify-between">
+                    <Text
+                      className={`text-base ${
+                        selectedProduct ? "text-gray-900" : "text-gray-400"
+                      }`}
+                    >
+                      {selectedProduct
+                        ? selectedProduct.nombreProducto
+                        : loadingProducts
+                        ? "Cargando promociones..."
+                        : customProducts.length
+                        ? "Selecciona una promoción"
+                        : "No hay promociones"}
+                    </Text>
+
+                    {/* Si hay un producto seleccionado, mostrar icono para quitarlo */}
+                    {selectedProduct ? (
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setSelectedProduct(null);
+                          setActionType(null);
+                          setArticle("");
+                        }}
+                        className="ml-3 p-1 rounded-full bg-red-100"
+                      >
+                        <MaterialCommunityIcons name="close" size={18} color="#DC2626" />
+                      </Pressable>
+                    ) : (
+                      <MaterialCommunityIcons name="chevron-down" size={22} color="#6B7280" />
+                    )}
+                  </View>
+                </Pressable>
+
+                {/* Selector de acción si hay producto */}
+                {selectedProduct && (
+                  <View className="flex-row gap-3 mt-4">
+                    <Pressable
+                      onPress={() => setActionType("acumular")}
+                      className={`flex-1 py-3 rounded-2xl items-center border ${
+                        actionType === "acumular"
+                          ? "bg-blue-600 border-blue-600"
+                          : "border-gray-300"
+                      }`}
+                    >
+                      <Text
+                        className={`font-semibold ${
+                          actionType === "acumular" ? "text-white" : "text-gray-700"
+                        }`}
+                      >
+                        Acumular
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => setActionType("canjear")}
+                      className={`flex-1 py-3 rounded-2xl items-center border ${
+                        actionType === "canjear"
+                          ? "bg-green-600 border-green-600"
+                          : "border-gray-300"
+                      }`}
+                    >
+                      <Text
+                        className={`font-semibold ${
+                          actionType === "canjear" ? "text-white" : "text-gray-700"
+                        }`}
+                      >
+                        Canjear
+                      </Text>
+                    </Pressable>
+                  </View>
+                )}
               </View>
             )}
 
@@ -512,6 +763,23 @@ export default function SellPointsScreen() {
                 placeholder="Ej. Pizza grande"
                 placeholderTextColor="#9CA3AF"
                 className="text-base text-gray-800"
+              />
+            </View>
+
+            {/* ⬇️ Cantidad: SIEMPRE visible (fuera del condicional) */}
+            <Text className="text-gray-500 mt-5 mb-2">Cantidad</Text>
+            <View className="rounded-2xl border border-gray-300 bg-white px-4 py-3">
+              <TextInput
+                value={qty}
+                onChangeText={(v) => {
+                  const d = v.replace(/[^0-9]/g, "");
+                  setQty(d || "1");
+                }}
+                placeholder="1"
+                placeholderTextColor="#9CA3AF"
+                className="text-base text-gray-800"
+                keyboardType="number-pad"
+                inputMode="numeric"
               />
             </View>
 
@@ -544,9 +812,7 @@ export default function SellPointsScreen() {
 
             {/* Switch aplicar saldo */}
             <View className="flex-row items-center justify-between mt-5">
-              <Text className="text-gray-900 font-semibold">
-                Aplicar puntos disponibles
-              </Text>
+              <Text className="text-gray-900 font-semibold">Aplicar puntos disponibles</Text>
               <Switch value={wantsRedeem} onValueChange={setWantsRedeem} />
             </View>
 
@@ -575,7 +841,72 @@ export default function SellPointsScreen() {
         </View>
       </Safe>
 
-      {/* ===== Modal WhatsApp ===== */}
+      {/* Modal selector de productos */}
+      <RNModal
+        visible={productPickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setProductPickerOpen(false)}
+      >
+        <View className="flex-1 bg-black/60 items-center justify-center px-6">
+          <View className="w-full max-w-md bg-white rounded-3xl p-5 border border-blue-100">
+            <Text className="text-lg font-extrabold text-slate-900">
+              Selecciona una promoción
+            </Text>
+            <View className="mt-3 max-h-80">
+              {loadingProducts ? (
+                <View className="items-center py-6">
+                  <ActivityIndicator color="#2563EB" />
+                </View>
+              ) : customProducts.length === 0 ? (
+                <Text className="text-slate-500 mt-2">No hay promociones disponibles.</Text>
+              ) : (
+                customProducts.map((p) => (
+                  <Pressable
+                    key={p.idProductoCustom}
+                    onPress={() => {
+                      setSelectedProduct(p);
+                      if (!article) setArticle(p.nombreProducto);
+                      setProductPickerOpen(false);
+                    }}
+                    className="py-3 px-3 rounded-xl border border-slate-200 mb-2"
+                  >
+                    <Text className="font-semibold text-slate-800">{p.nombreProducto}</Text>
+                    <Text className="text-slate-500 text-xs mt-1">
+                      Tipo: {p.tipoAcumulacion} · Meta: {p.meta} · % x compra:{" "}
+                      {p.porcentajePorCompra}%
+                    </Text>
+                    {p.recompensa ? (
+                      <Text className="text-emerald-600 text-xs mt-1">
+                        Recompensa: {p.recompensa}
+                      </Text>
+                    ) : null}
+                  </Pressable>
+                ))
+              )}
+            </View>
+
+            <View className="flex-row gap-3 mt-3">
+              <Pressable
+                className="flex-1 py-3 rounded-2xl border border-slate-300 items-center"
+                onPress={() => setProductPickerOpen(false)}
+              >
+                <Text className="text-slate-700 font-semibold">Cerrar</Text>
+              </Pressable>
+              {selectedProduct && (
+                <Pressable
+                  className="flex-1 py-3 rounded-2xl items-center bg-blue-600"
+                  onPress={() => setProductPickerOpen(false)}
+                >
+                  <Text className="text-white font-extrabold">Usar</Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
+        </View>
+      </RNModal>
+
+      {/* Modal WhatsApp */}
       <RNModal
         visible={waModalVisible}
         animationType="fade"
@@ -588,7 +919,7 @@ export default function SellPointsScreen() {
               <View className="h-12 w-12 rounded-full bg-green-100 items-center justify-center">
                 <MaterialCommunityIcons name="whatsapp" size={28} color="#16a34a" />
               </View>
-              <Text className="text-xl font-extrabold text-slate-900 mt-3">
+              <Text className="text-xl font-extrabold text-slate-900">
                 Enviar por WhatsApp
               </Text>
               <Text className="text-slate-600 mt-1 text-center">

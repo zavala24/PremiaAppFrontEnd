@@ -23,7 +23,7 @@ type ApiPaged<T> = {
 
 // Mapper JSON -> dominio
 const mapApiBusiness = (n: any): Business => ({
-  id: n.idNegocio,
+  idNegocio: n.idNegocio,
   name: n.nombre,
   category: n.categoria ?? null,
   facebook: n.facebook ?? null,
@@ -37,6 +37,7 @@ const mapApiBusiness = (n: any): Business => ({
         porcentajeVentas: n.configuracion.porcentajeVentas,
         urlLogo: n.configuracion.urlLogo ?? null,
         activo: !!n.configuracion.activo,
+        permitirConfiguracionPersonalizada: n.configuracion.permitirConfiguracionPersonalizada
       }
     : null,
     puntosAcumulados: n.puntosAcumulados ?? n.PuntosAcumulados
