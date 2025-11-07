@@ -10,6 +10,7 @@ export interface AcumularProgresoCustomRequest {
   cantidad?: number | null;      // para Compra/Cantidad
   monto?: number | null;         // para Monto
   descripcion?: string | null;
+  idNegocio: number
 }
 
 export interface CanjearProgresoCustomRequest extends AcumularProgresoCustomRequest {}

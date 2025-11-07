@@ -174,9 +174,8 @@ export default function HomeScreen() {
     try {
       const { status, data, message } = await businessService.getNegociosSeguidosByTelefono(telefono);
       if (status < 200 || status >= 300) throw new Error(message || "No se pudieron obtener tus negocios.");
-
       const ui = (data ?? []).map((b) => ({
-        id: b.id,
+        id: b.idNegocio,
         name: b.name,
         category: b.category,
         logoUrl: b.configuracion?.urlLogo ?? null,
@@ -185,7 +184,7 @@ export default function HomeScreen() {
         sitioWeb: b.sitioWeb,
         direccion: b.direccion,
         descripcion: b.descripcion,
-        puntosAcumulados: b.puntosAcumulados ?? null,
+        puntosAcumulados: b.puntosAcumulados,
       }));
 
       setMyItems(ui);
@@ -327,6 +326,7 @@ export default function HomeScreen() {
   );
 
   const BusinessCard = ({ item }: { item: UiBusiness }) => {
+
     const isFollowing = followSet.has(item.id);
     const isBusy = !!pending[item.id];
     const puntos = isFollowing ? pointsByBiz[item.id] ?? item.puntosAcumulados ?? 0 : undefined;

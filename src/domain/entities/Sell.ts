@@ -10,6 +10,7 @@ export interface InsertSellPayload {
   TotalCobrado: number;
   SaldoAntes: number;
   SaldoDespues: number;
+  Cantidad: number;
 }
 
 export interface InsertSellResult {

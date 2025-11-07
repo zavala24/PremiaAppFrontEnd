@@ -37,19 +37,13 @@ import { InsertSellPayload } from "../domain/entities/Sell";
 import Toast from "react-native-toast-message";
 
 /* === NEW: productos custom === */
-import {
-  ProductosCustomRepository
-} from "../infrastructure/repositories/ProductosCustomRepository";
-import {
-  ProductosCustomService
-} from "../application/services/ProductosCustomService";
-import type {
-  IProductosCustomService
-} from "../application/interfaces/IProductosCustomService";
+import { ProductosCustomRepository } from "../infrastructure/repositories/ProductosCustomRepository";
+import { ProductosCustomService } from "../application/services/ProductosCustomService";
+import type { IProductosCustomService } from "../application/interfaces/IProductosCustomService";
 import type {
   ProductoCustom,
   AcumularProgresoCustomRequest,
-  CanjearProgresoCustomRequest
+  CanjearProgresoCustomRequest,
 } from "../application/interfaces/IProductosCustomService";
 
 const View = styled(RNView);
@@ -209,15 +203,17 @@ export default function SellPointsScreen() {
   const [selectedProduct, setSelectedProduct] = useState<ProductoCustom | null>(null);
   const [productPickerOpen, setProductPickerOpen] = useState(false);
 
-  // ⬇️ Cantidad: SIEMPRE visible
+  // Cantidad: admite decimales
   const [qty, setQty] = useState<string>("1");
   const qtyNumber = useMemo(() => {
-    const n = Number(qty);
+    const n = Number((qty || "1").replace(",", "."));
     return Number.isFinite(n) && n > 0 ? n : 1;
   }, [qty]);
 
   // acción: acumular o canjear
   const [actionType, setActionType] = useState<"acumular" | "canjear" | null>(null);
+
+  const isCustomFlow = !!selectedProduct;
 
   // Cargar negocio
   useEffect(() => {
@@ -230,7 +226,6 @@ export default function SellPointsScreen() {
           return;
         }
         const res = await businessService.getNegocioConfigByTelefono(user.telefono);
-        console.log("REEEEEEEs",res.data.configuracion)
         if (!mounted) return;
         if (res.status !== 200 || !res.data) {
           setBizError(res.message || "No fue posible obtener el negocio.");
@@ -255,7 +250,7 @@ export default function SellPointsScreen() {
   useEffect(() => {
     const usuarioNombre =
       (user as any)?.usuarioNombre || (user as any)?.username || user?.telefono || "";
-    if (!permitirCustom || !usuarioNombre) {
+    if (!permitirCustom || !usuarioNombre || !businessId) {
       setCustomProducts([]);
       setSelectedProduct(null);
       setActionType(null);
@@ -274,14 +269,14 @@ export default function SellPointsScreen() {
         setLoadingProducts(false);
       }
     })();
-  }, [permitirCustom, user?.telefono]);
+  }, [permitirCustom, user?.telefono, businessId]);
 
   // Números / cálculos
   const amountNumber = useMemo(
     () => Number((amount || "0").replace(",", ".")) || 0,
     [amount]
   );
-  const applied = wantsRedeem ? Math.min(customerBalance, amountNumber) : 0;
+  const applied = isCustomFlow ? 0 : wantsRedeem ? Math.min(customerBalance, amountNumber) : 0;
   const totalAfterRedeem = Math.max(0, amountNumber - applied);
 
   // Consultar CLIENTE por teléfono
@@ -351,7 +346,6 @@ export default function SellPointsScreen() {
     setCustomerName(null);
     setCustomerBalance(0);
     setUserValid(null);
-    // NEW
     setSelectedProduct(null);
     setActionType(null);
     setQty("1");
@@ -395,8 +389,8 @@ export default function SellPointsScreen() {
     try {
       setLoadingSubmit(true);
 
-      // === NEW: si hay producto seleccionado, primero acumular/canjear ===
-      if (selectedProduct) {
+      // === FLUJO PERSONALIZADO ===
+      if (isCustomFlow && selectedProduct) {
         const usuarioNombre =
           (user as any)?.usuarioNombre || (user as any)?.username || user?.telefono || "";
         if (!usuarioNombre) {
@@ -420,7 +414,6 @@ export default function SellPointsScreen() {
           return;
         }
 
-        // construir request genérico
         const reqBase = {
           usuario: usuarioNombre,
           usuarioOperacion: user?.telefono ?? usuarioNombre,
@@ -429,13 +422,13 @@ export default function SellPointsScreen() {
           cantidad: qtyNumber,
           monto: amountNumber,
           descripcion: description?.trim() || null,
+          idNegocio: businessId,
         };
 
         if (actionType === "acumular") {
-          const { resp } =
-            await productosService.acumularProgresoCustom(
-              reqBase as AcumularProgresoCustomRequest
-            );
+          const { resp } = await productosService.acumularProgresoCustom(
+            reqBase as AcumularProgresoCustomRequest
+          );
           if (!resp?.success) {
             Toast.show({
               type: "error",
@@ -446,11 +439,16 @@ export default function SellPointsScreen() {
             setLoadingSubmit(false);
             return;
           }
+          Toast.show({
+            type: "success",
+            text1: "Progreso acumulado correctamente.",
+            position: "top",
+            visibilityTime: 2000,
+          });
         } else if (actionType === "canjear") {
-          const { resp } =
-            await productosService.canjearProgresoCustom(
-              reqBase as CanjearProgresoCustomRequest
-            );
+          const { resp } = await productosService.canjearProgresoCustom(
+            reqBase as CanjearProgresoCustomRequest
+          );
           if (!resp?.success) {
             Toast.show({
               type: "error",
@@ -461,27 +459,36 @@ export default function SellPointsScreen() {
             setLoadingSubmit(false);
             return;
           }
+          Toast.show({
+            type: "success",
+            text1: "Promoción canjeada correctamente.",
+            position: "top",
+            visibilityTime: 2000,
+          });
         }
+
+        clearForm();
+        setLoadingSubmit(false);
+        return;
       }
 
-      // === Venta normal (igual que antes) ===
+      // === FLUJO NORMAL ===
       const payload: InsertSellPayload = {
         NegocioId: businessId,
         TelefonoCliente: p,
         CreadoPor: user?.telefono ?? "",
-        Articulo: article.trim() || (selectedProduct?.nombreProducto ?? null),
+        Articulo: article.trim() || null,
         Descripcion: description.trim() || null,
-        Monto: amountNumber,
+        Monto: amountNumber, // precio unitario
+        Cantidad: qtyNumber, // cantidad decimal
         PuntosAplicados: wantsRedeem,
         TotalCobrado: Math.max(
           0,
-          amountNumber -
-            (wantsRedeem ? Math.min(customerBalance, amountNumber) : 0)
+          amountNumber - (wantsRedeem ? Math.min(customerBalance, amountNumber) : 0)
         ),
         SaldoAntes: customerBalance,
         SaldoDespues:
-          customerBalance -
-          (wantsRedeem ? Math.min(customerBalance, amountNumber) : 0),
+          customerBalance - (wantsRedeem ? Math.min(customerBalance, amountNumber) : 0),
       };
 
       const { resp, result } = await sellService.insertSellByUserPhoneNumber(payload);
@@ -526,7 +533,7 @@ export default function SellPointsScreen() {
     } catch (e: any) {
       Toast.show({
         type: "error",
-        text1: "Falló el registro de venta.",
+        text1: "Falló el registro.",
         position: "top",
         visibilityTime: 2000,
       });
@@ -534,6 +541,13 @@ export default function SellPointsScreen() {
       setLoadingSubmit(false);
     }
   };
+
+  /* ==== Sincroniza ARTÍCULO con la promoción seleccionada ==== */
+  useEffect(() => {
+    if (selectedProduct) {
+      setArticle(selectedProduct.nombreProducto);
+    }
+  }, [selectedProduct]);
 
   /* ========================= Render ========================= */
   return (
@@ -695,14 +709,15 @@ export default function SellPointsScreen() {
                         : "No hay promociones"}
                     </Text>
 
-                    {/* Si hay un producto seleccionado, mostrar icono para quitarlo */}
+                    {/* Quitar promo */}
                     {selectedProduct ? (
                       <Pressable
                         onPress={(e) => {
                           e.stopPropagation();
                           setSelectedProduct(null);
                           setActionType(null);
-                          setArticle("");
+                          setArticle(""); // limpia artículo al quitar promo
+                          setWantsRedeem(false);
                         }}
                         className="ml-3 p-1 rounded-full bg-red-100"
                       >
@@ -713,6 +728,75 @@ export default function SellPointsScreen() {
                     )}
                   </View>
                 </Pressable>
+
+                {/* Lista en modal */}
+                <RNModal
+                  visible={productPickerOpen}
+                  transparent
+                  animationType="fade"
+                  onRequestClose={() => setProductPickerOpen(false)}
+                >
+                  <View className="flex-1 bg-black/60 items-center justify-center px-6">
+                    <View className="w-full max-w-md bg-white rounded-3xl p-5 border border-blue-100">
+                      <Text className="text-lg font-extrabold text-slate-900">
+                        Selecciona una promoción
+                      </Text>
+                      <View className="mt-3 max-h-80">
+                        {loadingProducts ? (
+                          <View className="items-center py-6">
+                            <ActivityIndicator color="#2563EB" />
+                          </View>
+                        ) : customProducts.length === 0 ? (
+                          <Text className="text-slate-500 mt-2">
+                            No hay promociones disponibles.
+                          </Text>
+                        ) : (
+                          customProducts.map((p) => (
+                            <Pressable
+                              key={p.idProductoCustom}
+                              onPress={() => {
+                                setSelectedProduct(p);
+                                setArticle(p.nombreProducto); // sincroniza SIEMPRE
+                                setProductPickerOpen(false);
+                              }}
+                              className="py-3 px-3 rounded-xl border border-slate-200 mb-2"
+                            >
+                              <Text className="font-semibold text-slate-800">
+                                {p.nombreProducto}
+                              </Text>
+                              <Text className="text-slate-500 text-xs mt-1">
+                                Tipo: {p.tipoAcumulacion} · Meta: {p.meta} · % x compra:{" "}
+                                {p.porcentajePorCompra}%
+                              </Text>
+                              {p.recompensa ? (
+                                <Text className="text-emerald-600 text-xs mt-1">
+                                  Recompensa: {p.recompensa}
+                                </Text>
+                              ) : null}
+                            </Pressable>
+                          ))
+                        )}
+                      </View>
+
+                      <View className="flex-row gap-3 mt-3">
+                        <Pressable
+                          className="flex-1 py-3 rounded-2xl border border-slate-300 items-center"
+                          onPress={() => setProductPickerOpen(false)}
+                        >
+                          <Text className="text-slate-700 font-semibold">Cerrar</Text>
+                        </Pressable>
+                        {selectedProduct && (
+                          <Pressable
+                            className="flex-1 py-3 rounded-2xl items-center bg-blue-600"
+                            onPress={() => setProductPickerOpen(false)}
+                          >
+                            <Text className="text-white font-extrabold">Usar</Text>
+                          </Pressable>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                </RNModal>
 
                 {/* Selector de acción si hay producto */}
                 {selectedProduct && (
@@ -766,20 +850,27 @@ export default function SellPointsScreen() {
               />
             </View>
 
-            {/* ⬇️ Cantidad: SIEMPRE visible (fuera del condicional) */}
+            {/* Cantidad (decimales) */}
             <Text className="text-gray-500 mt-5 mb-2">Cantidad</Text>
             <View className="rounded-2xl border border-gray-300 bg-white px-4 py-3">
               <TextInput
                 value={qty}
                 onChangeText={(v) => {
-                  const d = v.replace(/[^0-9]/g, "");
-                  setQty(d || "1");
+                  // permite vaciar mientras se edita
+                  let s = v.replace(/,/g, ".").replace(/[^0-9.]/g, "");
+                  const parts = s.split(".");
+                  if (parts.length > 2) s = `${parts[0]}.${parts.slice(1).join("")}`;
+                  setQty(s);
+                }}
+                onBlur={() => {
+                  const n = Number((qty || "").replace(",", "."));
+                  if (!Number.isFinite(n) || n <= 0) setQty("1");
                 }}
                 placeholder="1"
                 placeholderTextColor="#9CA3AF"
                 className="text-base text-gray-800"
-                keyboardType="number-pad"
-                inputMode="numeric"
+                keyboardType="decimal-pad"
+                inputMode="decimal"
               />
             </View>
 
@@ -811,9 +902,23 @@ export default function SellPointsScreen() {
             </View>
 
             {/* Switch aplicar saldo */}
-            <View className="flex-row items-center justify-between mt-5">
-              <Text className="text-gray-900 font-semibold">Aplicar puntos disponibles</Text>
-              <Switch value={wantsRedeem} onValueChange={setWantsRedeem} />
+            <View className="mt-5">
+              <View className="flex-row items-center justify-between">
+                <Text className="text-gray-900 font-semibold">Aplicar puntos disponibles</Text>
+                <Switch
+                  value={isCustomFlow ? false : wantsRedeem}
+                  onValueChange={(v) => {
+                    if (isCustomFlow) return;
+                    setWantsRedeem(v);
+                  }}
+                  disabled={isCustomFlow}
+                />
+              </View>
+              {isCustomFlow && (
+                <Text className="text-xs text-red-600 mt-1">
+                  No disponible cuando hay una promoción personalizada seleccionada.
+                </Text>
+              )}
             </View>
 
             {/* Resumen */}
@@ -826,87 +931,30 @@ export default function SellPointsScreen() {
             {/* Confirmar */}
             <Pressable
               onPress={handleSubmit}
-              disabled={loadingSubmit || bizLoading || !!bizError || userValid !== true}
+              disabled={
+                loadingSubmit ||
+                bizLoading ||
+                !!bizError ||
+                userValid !== true ||
+                (isCustomFlow && !actionType)
+              }
               className={`mt-5 py-4 rounded-2xl items-center ${
-                loadingSubmit || userValid !== true ? "bg-blue-300" : "bg-green-500"
+                loadingSubmit || userValid !== true || (isCustomFlow && !actionType)
+                  ? "bg-blue-300"
+                  : "bg-green-500"
               }`}
             >
               {loadingSubmit ? (
                 <ActivityIndicator color="#0b1220" />
               ) : (
-                <Text className="text-[#0b1220] font-extrabold">Confirmar venta</Text>
+                <Text className="text-[#0b1220] font-extrabold">Confirmar</Text>
               )}
             </Pressable>
           </ScrollView>
         </View>
       </Safe>
 
-      {/* Modal selector de productos */}
-      <RNModal
-        visible={productPickerOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setProductPickerOpen(false)}
-      >
-        <View className="flex-1 bg-black/60 items-center justify-center px-6">
-          <View className="w-full max-w-md bg-white rounded-3xl p-5 border border-blue-100">
-            <Text className="text-lg font-extrabold text-slate-900">
-              Selecciona una promoción
-            </Text>
-            <View className="mt-3 max-h-80">
-              {loadingProducts ? (
-                <View className="items-center py-6">
-                  <ActivityIndicator color="#2563EB" />
-                </View>
-              ) : customProducts.length === 0 ? (
-                <Text className="text-slate-500 mt-2">No hay promociones disponibles.</Text>
-              ) : (
-                customProducts.map((p) => (
-                  <Pressable
-                    key={p.idProductoCustom}
-                    onPress={() => {
-                      setSelectedProduct(p);
-                      if (!article) setArticle(p.nombreProducto);
-                      setProductPickerOpen(false);
-                    }}
-                    className="py-3 px-3 rounded-xl border border-slate-200 mb-2"
-                  >
-                    <Text className="font-semibold text-slate-800">{p.nombreProducto}</Text>
-                    <Text className="text-slate-500 text-xs mt-1">
-                      Tipo: {p.tipoAcumulacion} · Meta: {p.meta} · % x compra:{" "}
-                      {p.porcentajePorCompra}%
-                    </Text>
-                    {p.recompensa ? (
-                      <Text className="text-emerald-600 text-xs mt-1">
-                        Recompensa: {p.recompensa}
-                      </Text>
-                    ) : null}
-                  </Pressable>
-                ))
-              )}
-            </View>
-
-            <View className="flex-row gap-3 mt-3">
-              <Pressable
-                className="flex-1 py-3 rounded-2xl border border-slate-300 items-center"
-                onPress={() => setProductPickerOpen(false)}
-              >
-                <Text className="text-slate-700 font-semibold">Cerrar</Text>
-              </Pressable>
-              {selectedProduct && (
-                <Pressable
-                  className="flex-1 py-3 rounded-2xl items-center bg-blue-600"
-                  onPress={() => setProductPickerOpen(false)}
-                >
-                  <Text className="text-white font-extrabold">Usar</Text>
-                </Pressable>
-              )}
-            </View>
-          </View>
-        </View>
-      </RNModal>
-
-      {/* Modal WhatsApp */}
+      {/* Modal WhatsApp (solo flujo normal) */}
       <RNModal
         visible={waModalVisible}
         animationType="fade"
