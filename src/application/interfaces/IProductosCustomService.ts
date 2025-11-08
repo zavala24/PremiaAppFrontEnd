@@ -3,6 +3,8 @@ import {
   ProductosCustomListResponse,
   AcumularProgresoCustomRequest,
   CanjearProgresoCustomRequest,
+  GetProgresoCustomParams,          // 👈 nuevo
+  ProgresoCustomDto,                // 👈 nuevo
 } from "../../domain/repositories/IProductosCustomRepository";
 
 export interface IProductosCustomService {
@@ -15,6 +17,17 @@ export interface IProductosCustomService {
   canjearProgresoCustom(
     req: CanjearProgresoCustomRequest
   ): Promise<{ resp: any; data?: any }>;
+
+  /** ===== NUEVO: progreso de una promo por cliente ===== */
+  getProgresoCustom(
+    params: GetProgresoCustomParams
+  ): Promise<{ resp: any; data: ProgresoCustomDto | null }>;
 }
 
-export type { ProductoCustom, AcumularProgresoCustomRequest, CanjearProgresoCustomRequest };
+export type {
+  ProductoCustom,
+  AcumularProgresoCustomRequest,
+  CanjearProgresoCustomRequest,
+  GetProgresoCustomParams,          // 👈 export
+  ProgresoCustomDto,                // 👈 export
+};

@@ -36,7 +36,7 @@ import { InsertSellPayload } from "../domain/entities/Sell";
 
 import Toast from "react-native-toast-message";
 
-/* === NEW: productos custom === */
+/* === Productos custom === */
 import { ProductosCustomRepository } from "../infrastructure/repositories/ProductosCustomRepository";
 import { ProductosCustomService } from "../application/services/ProductosCustomService";
 import type { IProductosCustomService } from "../application/interfaces/IProductosCustomService";
@@ -44,6 +44,8 @@ import type {
   ProductoCustom,
   AcumularProgresoCustomRequest,
   CanjearProgresoCustomRequest,
+  GetProgresoCustomParams,
+  ProgresoCustomDto,
 } from "../application/interfaces/IProductosCustomService";
 
 const View = styled(RNView);
@@ -190,12 +192,12 @@ export default function SellPointsScreen() {
   const repository = new SellRepository();
   const sellService: ISellService = new SellService(repository);
 
-  /* === NEW: productos custom service === */
+  /* === productos custom service === */
   const productosService: IProductosCustomService = new ProductosCustomService(
     new ProductosCustomRepository()
   );
 
-  // === NEW: estado de UI para custom products ===
+  // === estado de UI para custom products ===
   const permitirCustom = business?.configuracion?.permitirConfiguracionPersonalizada === true;
   const [customProducts, setCustomProducts] = useState<ProductoCustom[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
@@ -214,6 +216,10 @@ export default function SellPointsScreen() {
   const [actionType, setActionType] = useState<"acumular" | "canjear" | null>(null);
 
   const isCustomFlow = !!selectedProduct;
+
+  // === PROGRESO CUSTOM (UI local) ===
+  const [progressLoading, setProgressLoading] = useState(false);
+  const [progress, setProgress] = useState<ProgresoCustomDto | null>(null);
 
   // Cargar negocio
   useEffect(() => {
@@ -330,7 +336,9 @@ export default function SellPointsScreen() {
       if (digits.length <= 10) return digits;
       return prev;
     });
+    // Reset de validación y progreso cuando cambie el teléfono
     setUserValid(null);
+    setProgress(null);
   };
 
   const onChangeAmount = (v: string) => {
@@ -349,6 +357,7 @@ export default function SellPointsScreen() {
     setSelectedProduct(null);
     setActionType(null);
     setQty("1");
+    setProgress(null);
   };
 
   // ====== Submit ======
@@ -544,10 +553,38 @@ export default function SellPointsScreen() {
 
   /* ==== Sincroniza ARTÍCULO con la promoción seleccionada ==== */
   useEffect(() => {
-    if (selectedProduct) {
-      setArticle(selectedProduct.nombreProducto);
-    }
+    if (selectedProduct) setArticle(selectedProduct.nombreProducto);
   }, [selectedProduct]);
+
+  /* ==== Trae PROGRESO cuando: hay promo seleccionada + teléfono válido + negocio ==== */
+  useEffect(() => {
+    const p = onlyDigits(phone);
+    if (!selectedProduct || userValid !== true || p.length !== 10 || !businessId) {
+      setProgress(null);
+      return;
+    }
+    const run = async () => {
+      try {
+        setProgressLoading(true);
+        const params: GetProgresoCustomParams = {
+          idNegocio: businessId,
+          telefonoCliente: p,
+          idProductoCustom: selectedProduct.idProductoCustom,
+        };
+        const { resp, data } = await productosService.getProgresoCustom(params);
+        if (!resp?.status || resp.status >= 400) {
+          setProgress(null);
+          return;
+        }
+        setProgress(data ?? null);
+      } catch {
+        setProgress(null);
+      } finally {
+        setProgressLoading(false);
+      }
+    };
+    run();
+  }, [selectedProduct, userValid, phone, businessId]);
 
   /* ========================= Render ========================= */
   return (
@@ -691,22 +728,27 @@ export default function SellPointsScreen() {
 
                 {/* Dropdown "fake": press -> modal con lista */}
                 <Pressable
-                  onPress={() => setProductPickerOpen(true)}
-                  className="rounded-2xl border border-gray-300 bg-white px-4 py-3 flex-row items-center justify-between"
+                  onPress={() => (userValid ? setProductPickerOpen(true) : null)}
+                  className={`rounded-2xl border px-4 py-3 flex-row items-center justify-between ${
+                    userValid ? "bg-white border-gray-300" : "bg-gray-100 border-gray-200"
+                  }`}
+                  disabled={!userValid}
                 >
                   <View className="flex-1 flex-row items-center justify-between">
                     <Text
                       className={`text-base ${
-                        selectedProduct ? "text-gray-900" : "text-gray-400"
+                        selectedProduct ? "text-gray-900" : userValid ? "text-gray-400" : "text-gray-400"
                       }`}
                     >
                       {selectedProduct
                         ? selectedProduct.nombreProducto
                         : loadingProducts
                         ? "Cargando promociones..."
-                        : customProducts.length
-                        ? "Selecciona una promoción"
-                        : "No hay promociones"}
+                        : userValid
+                        ? customProducts.length
+                          ? "Selecciona una promoción"
+                          : "No hay promociones"
+                        : "Valida el teléfono para habilitar"}
                     </Text>
 
                     {/* Quitar promo */}
@@ -716,15 +758,20 @@ export default function SellPointsScreen() {
                           e.stopPropagation();
                           setSelectedProduct(null);
                           setActionType(null);
-                          setArticle(""); // limpia artículo al quitar promo
+                          setArticle("");
                           setWantsRedeem(false);
+                          setProgress(null);
                         }}
                         className="ml-3 p-1 rounded-full bg-red-100"
                       >
                         <MaterialCommunityIcons name="close" size={18} color="#DC2626" />
                       </Pressable>
                     ) : (
-                      <MaterialCommunityIcons name="chevron-down" size={22} color="#6B7280" />
+                      <MaterialCommunityIcons
+                        name="chevron-down"
+                        size={22}
+                        color={userValid ? "#6B7280" : "#9CA3AF"}
+                      />
                     )}
                   </View>
                 </Pressable>
@@ -756,7 +803,7 @@ export default function SellPointsScreen() {
                               key={p.idProductoCustom}
                               onPress={() => {
                                 setSelectedProduct(p);
-                                setArticle(p.nombreProducto); // sincroniza SIEMPRE
+                                setArticle(p.nombreProducto);
                                 setProductPickerOpen(false);
                               }}
                               className="py-3 px-3 rounded-xl border border-slate-200 mb-2"
@@ -925,6 +972,47 @@ export default function SellPointsScreen() {
             <View className="bg-[#0b1220] border border-[#1e293b] rounded-2xl p-4 mt-5">
               <Row label="Monto" value={currency(amountNumber)} />
               <Row label="Total puntos en dinero" value={currency(customerBalance)} />
+
+              {/* ===== Avance de promoción (solo si hay promo seleccionada y usuario válido) ===== */}
+              {selectedProduct && userValid && (
+                <View className="mt-3">
+                  <Text className="text-gray-300 mb-2">
+                    Avance de promoción{" "}
+                    <Text className="text-gray-100 font-semibold">
+                      ({selectedProduct.nombreProducto})
+                    </Text>
+                  </Text>
+
+                  <View className="w-full h-2.5 bg-white/10 rounded-full overflow-hidden">
+                    {/* barra */}
+                    <View
+                      className="h-full bg-emerald-500"
+                      style={{
+                        width: `${Math.max(
+                          0,
+                          Math.min(100, progress?.porcentaje ?? 0)
+                        )}%`,
+                      }}
+                    />
+                  </View>
+
+                  <View className="flex-row justify-between mt-2">
+                    <Text className="text-gray-400 text-xs">
+                      {progressLoading
+                        ? "Cargando avance…"
+                        : progress
+                        ? `${progress.porcentaje}% • ${progress.estado}`
+                        : "Sin progreso"}
+                    </Text>
+                    {progress?.ultimaActualizacion ? (
+                      <Text className="text-gray-400 text-xs">
+                        {new Date(progress.ultimaActualizacion).toLocaleString("es-MX")}
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+              )}
+
               <Row label="Monto aplicado" value={currency(totalAfterRedeem)} strong />
             </View>
 
