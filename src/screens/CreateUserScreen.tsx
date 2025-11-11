@@ -98,7 +98,7 @@ export default function CreateUserScreen() {
   const handleCrearUsuario = async () => {
     if (!isValid || loading) return;
 
-    const businessId = business?.id ?? 0;
+    const businessId = business?.idNegocio ?? 0;
     if (!businessId) {
       Toast.show({
         type: "error",
@@ -127,7 +127,7 @@ export default function CreateUserScreen() {
       Toast.show({
         type: "success",
         text1: "Usuario creado",
-        text2: `Teléfono: ${digits} • Negocio #${businessId}`,
+        text2: `Teléfono: ${digits}`,
         position: "top",
         visibilityTime: 2000,
         autoHide: true,
