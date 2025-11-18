@@ -84,6 +84,7 @@ const formatPhoneForWhatsApp = (raw: string) => {
   return digits.startsWith(DEFAULT_COUNTRY_CODE) ? digits : DEFAULT_COUNTRY_CODE + digits;
 };
 
+/* ======== NUEVO: WhatsApp con bloque de promoción (opcional) ======== */
 const buildWhatsAppMessage = ({
   businessName,
   customerName,
@@ -93,6 +94,13 @@ const buildWhatsAppMessage = ({
   total,
   saldoAntes,
   saldoDespues,
+  // <<< nuevo >>>
+  isCustom = false,
+  promoNombre,
+  accion,
+  porcentaje,
+  estado,
+  cantidadPromo,
 }: {
   businessName: string;
   customerName?: string | null;
@@ -102,8 +110,15 @@ const buildWhatsAppMessage = ({
   total: number;
   saldoAntes: number;
   saldoDespues: number;
-}) =>
-  [
+  // custom
+  isCustom?: boolean;
+  promoNombre?: string | null;
+  accion?: "acumular" | "canjear" | null;
+  porcentaje?: number | null;
+  estado?: string | null;
+  cantidadPromo?: number | null;
+}) => {
+  const base = [
     `Hola ${customerName ?? ""} 👋`,
     ``,
     `Gracias por tu compra en *${businessName}*.`,
@@ -117,9 +132,24 @@ const buildWhatsAppMessage = ({
     `💳 *Tus puntos*`,
     `• Saldo anterior: ${currency(saldoAntes)}`,
     `• Saldo actual: ${currency(saldoDespues)}`,
-    ``,
-    `¡Gracias por tu preferencia! 💙`,
-  ].join("\n");
+  ];
+
+  if (isCustom) {
+    base.push(
+      ``,
+      `🎯 *Promoción personalizada*`,
+      `• Promoción: ${promoNombre ?? "-"}`,
+      `• Acción: ${accion === "canjear" ? "Canjeado" : "Acumulado"}`,
+      ...(typeof cantidadPromo === "number" ? [`• Cantidad: ${cantidadPromo}`] : []),
+      ...(typeof porcentaje === "number" || estado
+        ? [`• Avance: ${porcentaje ?? 0}%${estado ? ` • ${estado}` : ""}`]
+        : [])
+    );
+  }
+
+  base.push("", "¡Gracias por tu preferencia! 💙");
+  return base.join("\n");
+};
 
 async function sendWhatsApp(toPhone: string, text: string) {
   const phone = formatPhoneForWhatsApp(toPhone);
@@ -129,6 +159,7 @@ async function sendWhatsApp(toPhone: string, text: string) {
   else await Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`);
 }
 
+/* ======== NUEVO: Contexto con datos de promoción ======== */
 type WaContext = {
   toPhone: string;
   businessName: string;
@@ -139,6 +170,14 @@ type WaContext = {
   total: number;
   saldoAntes: number;
   saldoDespues: number;
+
+  // custom (opcionales)
+  isCustom?: boolean;
+  promoNombre?: string | null;
+  accion?: "acumular" | "canjear" | null;
+  porcentaje?: number | null;
+  estado?: string | null;
+  cantidadPromo?: number | null;
 };
 
 const MIN_LOOKUP_MS = 800;
@@ -434,49 +473,75 @@ export default function SellPointsScreen() {
           idNegocio: businessId,
         };
 
+        let ok = false;
         if (actionType === "acumular") {
           const { resp } = await productosService.acumularProgresoCustom(
             reqBase as AcumularProgresoCustomRequest
           );
-          if (!resp?.success) {
-            Toast.show({
-              type: "error",
-              text1: resp?.message || "No se pudo acumular el progreso.",
-              position: "top",
-              visibilityTime: 2000,
-            });
-            setLoadingSubmit(false);
-            return;
-          }
-          Toast.show({
-            type: "success",
-            text1: "Progreso acumulado correctamente.",
-            position: "top",
-            visibilityTime: 2000,
-          });
+          ok = !!resp?.success;
         } else if (actionType === "canjear") {
           const { resp } = await productosService.canjearProgresoCustom(
             reqBase as CanjearProgresoCustomRequest
           );
-          if (!resp?.success) {
-            Toast.show({
-              type: "error",
-              text1: resp?.message || "No se pudo canjear la promoción.",
-              position: "top",
-              visibilityTime: 2000,
-            });
-            setLoadingSubmit(false);
-            return;
-          }
+          ok = !!resp?.success;
+        }
+
+        if (!ok) {
           Toast.show({
-            type: "success",
-            text1: "Promoción canjeada correctamente.",
+            type: "error",
+            text1: "No se pudo registrar la operación.",
             position: "top",
             visibilityTime: 2000,
           });
+          setLoadingSubmit(false);
+          return;
         }
 
-        clearForm();
+        // <<< nuevo >>> Traer progreso actualizado para el mensaje
+        let porcentaje: number | null = null;
+        let estado: string | null = null;
+        try {
+          const params: GetProgresoCustomParams = {
+            idNegocio: businessId,
+            telefonoCliente: p,
+            idProductoCustom: selectedProduct.idProductoCustom,
+          };
+          const { data } = await productosService.getProgresoCustom(params);
+          porcentaje = data?.porcentaje ?? null;
+          estado = data?.estado ?? null;
+        } catch {
+          // ignore
+        }
+
+        Toast.show({
+          type: "success",
+          text1: actionType === "canjear" ? "Promoción canjeada." : "Progreso acumulado.",
+          position: "top",
+          visibilityTime: 2000,
+        });
+
+        // <<< nuevo >>> armar contexto para WhatsApp también en flujo custom
+        setWaContext({
+          toPhone: p,
+          businessName: business?.name ?? "Mi negocio",
+          customerName,
+          article: selectedProduct.nombreProducto,
+          amount: amountNumber,
+          applied: 0,
+          total: amountNumber, // en flujos de promoción normalmente no se descuentan puntos aquí
+          saldoAntes: customerBalance,
+          saldoDespues: customerBalance, // no alteramos saldo monetario de puntos en promo custom
+          isCustom: true,
+          promoNombre: selectedProduct.nombreProducto,
+          accion: actionType,
+          porcentaje,
+          estado,
+          cantidadPromo: qtyNumber,
+        });
+
+        if (waTimerRef.current) clearTimeout(waTimerRef.current);
+        waTimerRef.current = setTimeout(() => setWaModalVisible(true), 2000);
+
         setLoadingSubmit(false);
         return;
       }
@@ -973,7 +1038,7 @@ export default function SellPointsScreen() {
               <Row label="Monto" value={currency(amountNumber)} />
               <Row label="Total puntos en dinero" value={currency(customerBalance)} />
 
-              {/* ===== Avance de promoción (solo si hay promo seleccionada y usuario válido) ===== */}
+              {/* Avance promo seleccionada */}
               {selectedProduct && userValid && (
                 <View className="mt-3">
                   <Text className="text-gray-300 mb-2">
@@ -984,14 +1049,10 @@ export default function SellPointsScreen() {
                   </Text>
 
                   <View className="w-full h-2.5 bg-white/10 rounded-full overflow-hidden">
-                    {/* barra */}
                     <View
                       className="h-full bg-emerald-500"
                       style={{
-                        width: `${Math.max(
-                          0,
-                          Math.min(100, progress?.porcentaje ?? 0)
-                        )}%`,
+                        width: `${Math.max(0, Math.min(100, progress?.porcentaje ?? 0))}%`,
                       }}
                     />
                   </View>
@@ -1042,7 +1103,7 @@ export default function SellPointsScreen() {
         </View>
       </Safe>
 
-      {/* Modal WhatsApp (solo flujo normal) */}
+      {/* Modal WhatsApp (ahora para ambos flujos) */}
       <RNModal
         visible={waModalVisible}
         animationType="fade"
@@ -1059,7 +1120,7 @@ export default function SellPointsScreen() {
                 Enviar por WhatsApp
               </Text>
               <Text className="text-slate-600 mt-1 text-center">
-                ¿Quieres enviar el comprobante de la venta al cliente por WhatsApp?
+                ¿Quieres enviar el comprobante al cliente por WhatsApp?
               </Text>
             </View>
 
@@ -1087,6 +1148,13 @@ export default function SellPointsScreen() {
                       total: waContext.total,
                       saldoAntes: waContext.saldoAntes,
                       saldoDespues: waContext.saldoDespues,
+                      // custom
+                      isCustom: waContext.isCustom,
+                      promoNombre: waContext.promoNombre,
+                      accion: waContext.accion ?? null,
+                      porcentaje: waContext.porcentaje ?? null,
+                      estado: waContext.estado ?? null,
+                      cantidadPromo: waContext.cantidadPromo ?? null,
                     });
                     await sendWhatsApp(waContext.toPhone, msg);
                   }
