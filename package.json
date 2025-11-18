@@ -19,7 +19,7 @@
     "axios": "^1.11.0",
     "expo": "~54.0.0",
     "expo-build-properties": "^1.0.9",
-    "expo-dev-client": "^6.0.13",
+    "expo-dev-client": "~6.0.18",
     "expo-status-bar": "~3.0.8",
     "nativewind": "^2.0.11",
     "react": "19.1.0",
@@ -32,7 +32,8 @@
     "react-native-toast-message": "^2.3.3",
     "react-native-vector-icons": "^10.3.0",
     "react-native-web": "^0.21.0",
-    "expo-linear-gradient": "~15.0.7"
+    "expo-linear-gradient": "~15.0.7",
+    "expo-splash-screen": "~31.0.11"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
