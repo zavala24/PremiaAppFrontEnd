@@ -121,6 +121,14 @@ android {
             crunchPngs enablePngCrunchInRelease.toBoolean()
         }
     }
+        applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            if (variant.buildType.name == "release") {
+                // nombre final del apk
+                outputFileName = "pymefiel.apk"
+            }
+        }
+    }
     packagingOptions {
         jniLibs {
             def enableLegacyPackaging = findProperty('expo.useLegacyPackaging') ?: 'false'
