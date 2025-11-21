@@ -101,6 +101,7 @@ const buildWhatsAppMessage = ({
   porcentaje,
   estado,
   cantidadPromo,
+  cartItems,
 }: {
   businessName: string;
   customerName?: string | null;
@@ -117,6 +118,7 @@ const buildWhatsAppMessage = ({
   porcentaje?: number | null;
   estado?: string | null;
   cantidadPromo?: number | null;
+  cartItems?: { articulo?: string | null; cantidad: number; monto: number }[];
 }) => {
   const base = [
     `Hola ${customerName ?? ""} 👋`,
@@ -124,15 +126,21 @@ const buildWhatsAppMessage = ({
     `Gracias por tu compra en *${businessName}*.`,
     ``,
     `🧾 *Detalle de la compra*`,
-    `• Artículo: ${article?.trim() || "-"}`,
-    `• Monto: ${currency(amount)}`,
-    `• Puntos aplicados: ${currency(applied)}`,
-    `• Total cobrado: ${currency(total)}`,
-    ``,
-    `💳 *Tus puntos*`,
-    `• Saldo anterior: ${currency(saldoAntes)}`,
-    `• Saldo actual: ${currency(saldoDespues)}`,
   ];
+
+  if (cartItems && cartItems.length) {
+    cartItems.forEach((it, i) => {
+      base.push(`• ${i + 1}. ${it.articulo ?? "-"} x ${it.cantidad} = ${currency(it.monto * it.cantidad)}`);
+    });
+    base.push("", `• Subtotal: ${currency(amount)}`);
+  } else {
+    base.push(
+      `• Artículo: ${article?.trim() || "-"}`,
+      `• Monto: ${currency(amount)}`
+    );
+  }
+
+  base.push(`• Puntos aplicados: ${currency(applied)}`, `• Total cobrado: ${currency(total)}`, ``);
 
   if (isCustom) {
     base.push(
@@ -159,25 +167,27 @@ async function sendWhatsApp(toPhone: string, text: string) {
   else await Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`);
 }
 
-/* ======== NUEVO: Contexto con datos de promoción ======== */
-type WaContext = {
-  toPhone: string;
-  businessName: string;
-  customerName: string | null;
-  article: string | null;
-  amount: number;
-  applied: number;
-  total: number;
-  saldoAntes: number;
-  saldoDespues: number;
+/* ======== TYPES LOCALES (para el carrito y insertMany) ======== */
+type CartItem = {
+  id: string; // local id
+  articulo: string;
+  descripcion?: string | null;
+  monto: number; // unitario
+  cantidad: number;
+};
 
-  // custom (opcionales)
-  isCustom?: boolean;
-  promoNombre?: string | null;
-  accion?: "acumular" | "canjear" | null;
-  porcentaje?: number | null;
-  estado?: string | null;
-  cantidadPromo?: number | null;
+type InsertManySellsPayload = {
+  TelefonoCliente: string;
+  NegocioId: number;
+  CreadoPor: string;
+  Ventas: {
+    Articulo?: string | null;
+    Descripcion?: string | null;
+    Monto: number;
+    Cantidad: number;
+    PuntosAplicados: boolean;
+    SaldoAntes: number;
+  }[];
 };
 
 const MIN_LOOKUP_MS = 800;
@@ -209,9 +219,12 @@ export default function SellPointsScreen() {
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   const [wantsRedeem, setWantsRedeem] = useState(false);
 
+  // carrito
+  const [cart, setCart] = useState<CartItem[]>([]);
+
   // ===== Modal de WhatsApp =====
   const [waModalVisible, setWaModalVisible] = useState(false);
-  const [waContext, setWaContext] = useState<WaContext | null>(null);
+  const [waContext, setWaContext] = useState<any | null>(null);
 
   // Timer para abrir modal tras el toast
   const waTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -316,13 +329,27 @@ export default function SellPointsScreen() {
     })();
   }, [permitirCustom, user?.telefono, businessId]);
 
-  // Números / cálculos
+  // ======= CALCULOS DEL CARRITO =======
+  const cartSubtotal = useMemo(() => {
+    return cart.reduce((s, it) => s + it.monto * it.cantidad, 0);
+  }, [cart]);
+
+  // Si el carrito está vacío usamos el campo amount como monto único (legacy)
+  const displayedSubtotal = cart.length > 0 ? cartSubtotal : Number((amount || "0").replace(",", ".")) || 0;
+
+  // applied = puntos aplicados cuando switch ON (aplica sobre el subtotal mostrado)
+  const appliedAmount = useMemo(() => {
+    if (!wantsRedeem) return 0;
+    return Math.min(customerBalance, displayedSubtotal);
+  }, [wantsRedeem, customerBalance, displayedSubtotal]);
+
+  const totalToCharge = Math.max(0, displayedSubtotal - appliedAmount);
+
+  // Números / cálculos (legacy kept)
   const amountNumber = useMemo(
     () => Number((amount || "0").replace(",", ".")) || 0,
     [amount]
   );
-  const applied = isCustomFlow ? 0 : wantsRedeem ? Math.min(customerBalance, amountNumber) : 0;
-  const totalAfterRedeem = Math.max(0, amountNumber - applied);
 
   // Consultar CLIENTE por teléfono
   const handleLookup = async () => {
@@ -384,7 +411,7 @@ export default function SellPointsScreen() {
     setAmount(sanitizeAmount(v));
   };
 
-  const clearForm = () => {
+  const clearFormAndCart = () => {
     setPhone("");
     setAmount("");
     setArticle("");
@@ -397,6 +424,50 @@ export default function SellPointsScreen() {
     setActionType(null);
     setQty("1");
     setProgress(null);
+    setCart([]);
+  };
+
+  // ====== CARRITO: agregar, eliminar ======
+  const addToCart = () => {
+    // Validaciones mínimas
+    if (userValid !== true) {
+      Alert.alert("Usuario no válido", "Valida el usuario antes de añadir al carrito.");
+      return;
+    }
+    const mont = Number((amount || "0").replace(",", "."));
+    if (!(mont > 0)) {
+      Toast.show({ type: "error", text1: "Monto inválido", position: "top", visibilityTime: 1600 });
+      return;
+    }
+    const cant = Number((qty || "1").replace(",", "."));
+    if (!Number.isFinite(cant) || cant <= 0) {
+      Toast.show({ type: "error", text1: "Cantidad inválida", position: "top", visibilityTime: 1600 });
+      return;
+    }
+    if (!article.trim()) {
+      Toast.show({ type: "error", text1: "Agrega el nombre del artículo", position: "top", visibilityTime: 1600 });
+      return;
+    }
+
+    const newItem: CartItem = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      articulo: article.trim(),
+      descripcion: description.trim() || null,
+      monto: mont,
+      cantidad: cant,
+    };
+
+    setCart((prev) => [...prev, newItem]);
+
+    // limpiar inputs de item (pero mantener teléfono/cliente)
+    setArticle("");
+    setDescription("");
+    setAmount("");
+    setQty("1");
+  };
+
+  const removeFromCart = (id: string) => {
+    setCart((prev) => prev.filter((it) => it.id !== id));
   };
 
   // ====== Submit ======
@@ -415,7 +486,9 @@ export default function SellPointsScreen() {
       });
       return;
     }
-    if (!(amountNumber > 0)) {
+
+    // determine amount to validate > 0: use displayedSubtotal
+    if (!(displayedSubtotal > 0)) {
       Toast.show({
         type: "error",
         text1: "Monto inválido, el monto debe ser mayor a 0.",
@@ -424,6 +497,7 @@ export default function SellPointsScreen() {
       });
       return;
     }
+
     if (!businessId) {
       Toast.show({
         type: "error",
@@ -437,7 +511,7 @@ export default function SellPointsScreen() {
     try {
       setLoadingSubmit(true);
 
-      // === FLUJO PERSONALIZADO ===
+      // === FLUJO PERSONALIZADO (si se seleccionó un producto personalizado) ===
       if (isCustomFlow && selectedProduct) {
         const usuarioNombre =
           (user as any)?.usuarioNombre || (user as any)?.username || user?.telefono || "";
@@ -497,7 +571,7 @@ export default function SellPointsScreen() {
           return;
         }
 
-        // <<< nuevo >>> Traer progreso actualizado para el mensaje
+        // Traer progreso actualizado para el mensaje
         let porcentaje: number | null = null;
         let estado: string | null = null;
         try {
@@ -520,7 +594,6 @@ export default function SellPointsScreen() {
           visibilityTime: 2000,
         });
 
-        // <<< nuevo >>> armar contexto para WhatsApp también en flujo custom
         setWaContext({
           toPhone: p,
           businessName: business?.name ?? "Mi negocio",
@@ -528,26 +601,89 @@ export default function SellPointsScreen() {
           article: selectedProduct.nombreProducto,
           amount: amountNumber,
           applied: 0,
-          total: amountNumber, // en flujos de promoción normalmente no se descuentan puntos aquí
+          total: amountNumber,
           saldoAntes: customerBalance,
-          saldoDespues: customerBalance, // no alteramos saldo monetario de puntos en promo custom
+          saldoDespues: customerBalance,
           isCustom: true,
           promoNombre: selectedProduct.nombreProducto,
           accion: actionType,
           porcentaje,
           estado,
           cantidadPromo: qtyNumber,
+          cartItems: [],
         });
 
         if (waTimerRef.current) clearTimeout(waTimerRef.current);
-        waTimerRef.current = setTimeout(() => setWaModalVisible(true), 2000);
+        waTimerRef.current = setTimeout(() => setWaModalVisible(true), 1200);
 
         setLoadingSubmit(false);
         return;
       }
 
-      // === FLUJO NORMAL ===
-      const payload: InsertSellPayload = {
+      // === FLUJO MULTI-VENTAS si cart.length > 0 ===
+      if (cart.length > 0) {
+        // Construir payload InsertManySellsPayload
+        const ventas = cart.map((it) => ({
+          Articulo: it.articulo || null,
+          Descripcion: it.descripcion || null,
+          Monto: it.monto,
+          Cantidad: it.cantidad,
+          PuntosAplicados: wantsRedeem, // aplicamos flag por item (backend puede decidir)
+          SaldoAntes: customerBalance,
+        }));
+
+        const payload: InsertManySellsPayload = {
+          TelefonoCliente: p,
+          NegocioId: businessId,
+          CreadoPor: user?.telefono ?? "",
+          Ventas: ventas,
+        };
+
+        const { resp, result } = await (sellService as any).insertManySellsByUserPhoneNumber(
+          payload
+        );
+
+        if (!resp?.success) {
+          Toast.show({
+            type: "error",
+            text1: "No se pudieron registrar las ventas.",
+            position: "top",
+            visibilityTime: 2000,
+          });
+          setLoadingSubmit(false);
+          return;
+        }
+
+        // build whatsapp context from cart
+        setWaContext({
+          toPhone: p,
+          businessName: business?.name ?? "Mi negocio",
+          customerName,
+          article: null,
+          amount: displayedSubtotal,
+          applied: appliedAmount,
+          total: totalToCharge,
+          saldoAntes: customerBalance,
+          saldoDespues: Math.max(0, customerBalance - appliedAmount),
+          cartItems: cart.map((c) => ({ articulo: c.articulo, cantidad: c.cantidad, monto: c.monto })),
+        });
+
+        Toast.show({
+          type: "success",
+          text1: resp.message || "Ventas registradas con éxito.",
+          position: "top",
+          visibilityTime: 2000,
+        });
+
+        if (waTimerRef.current) clearTimeout(waTimerRef.current);
+        waTimerRef.current = setTimeout(() => setWaModalVisible(true), 1200);
+
+        setLoadingSubmit(false);
+        return;
+      }
+
+      // === FLUJO NORMAL cuando no hay carrito ===
+      const payloadSingle: InsertSellPayload = {
         NegocioId: businessId,
         TelefonoCliente: p,
         CreadoPor: user?.telefono ?? "",
@@ -565,7 +701,7 @@ export default function SellPointsScreen() {
           customerBalance - (wantsRedeem ? Math.min(customerBalance, amountNumber) : 0),
       };
 
-      const { resp, result } = await sellService.insertSellByUserPhoneNumber(payload);
+      const { resp, result } = await sellService.insertSellByUserPhoneNumber(payloadSingle);
       if (!resp.success) {
         Toast.show({
           type: "error",
@@ -578,20 +714,21 @@ export default function SellPointsScreen() {
       }
 
       const totalCobrado =
-        typeof result?.totalCobrado === "number" ? result.totalCobrado : payload.TotalCobrado;
+        typeof result?.totalCobrado === "number" ? result.totalCobrado : payloadSingle.TotalCobrado;
       const saldoDespues =
-        typeof result?.saldoDespues === "number" ? result.saldoDespues : payload.SaldoDespues;
+        typeof result?.saldoDespues === "number" ? result.saldoDespues : payloadSingle.SaldoDespues;
 
       setWaContext({
         toPhone: p,
         businessName: business?.name ?? "Mi negocio",
         customerName,
-        article: payload.Articulo || article,
+        article: payloadSingle.Articulo || article,
         amount: amountNumber,
         applied: wantsRedeem ? Math.min(customerBalance, amountNumber) : 0,
         total: totalCobrado ?? 0,
         saldoAntes: customerBalance,
         saldoDespues: saldoDespues ?? 0,
+        cartItems: [],
       });
 
       Toast.show({
@@ -603,7 +740,7 @@ export default function SellPointsScreen() {
       });
 
       if (waTimerRef.current) clearTimeout(waTimerRef.current);
-      waTimerRef.current = setTimeout(() => setWaModalVisible(true), 2000);
+      waTimerRef.current = setTimeout(() => setWaModalVisible(true), 1200);
     } catch (e: any) {
       Toast.show({
         type: "error",
@@ -987,7 +1124,7 @@ export default function SellPointsScreen() {
             </View>
 
             {/* Monto */}
-            <Text className="text-gray-500 mt-5 mb-2">Monto de la compra</Text>
+            <Text className="text-gray-500 mt-5 mb-2">Monto unitario</Text>
             <View className="rounded-2xl border border-gray-300 bg-white px-4 py-3">
               <TextInput
                 value={amount}
@@ -1002,7 +1139,7 @@ export default function SellPointsScreen() {
             </View>
 
             {/* Descripción */}
-            <Text className="text-gray-500 mt-5 mb-2">Descripción</Text>
+            <Text className="text-gray-500 mt-5 mb-2">Descripción (opcional)</Text>
             <View className="rounded-2xl border border-gray-300 bg-white px-4 py-3">
               <TextInput
                 value={description}
@@ -1013,10 +1150,52 @@ export default function SellPointsScreen() {
               />
             </View>
 
+            {/* Botón añadir al carrito */}
+            <View className="mt-4">
+              <Pressable
+                onPress={addToCart}
+                className="py-3 rounded-2xl items-center bg-blue-600"
+              >
+                <Text className="text-white font-extrabold">Añadir al carrito</Text>
+              </Pressable>
+            </View>
+
+            {/* Cart list */}
+            <View className="mt-4">
+              <Text className="text-gray-500 mb-2">Carrito ({cart.length})</Text>
+              {cart.length === 0 ? (
+                <View className="rounded-2xl border border-gray-200 p-3 bg-white">
+                  <Text className="text-gray-400">No hay artículos en el carrito.</Text>
+                </View>
+              ) : (
+                <View className="rounded-2xl border border-gray-200 p-3 bg-white">
+                  {cart.map((it) => (
+                    <View key={it.id} className="flex-row items-center justify-between py-2">
+                      <View className="flex-1 pr-2">
+                        <Text className="font-semibold text-slate-800">{it.articulo}</Text>
+                        <Text className="text-xs text-slate-500">
+                          {it.descripcion ?? ""}
+                        </Text>
+                        <Text className="text-xs text-slate-600 mt-1">
+                          {it.cantidad} × {currency(it.monto)} = {currency(it.monto * it.cantidad)}
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={() => removeFromCart(it.id)}
+                        className="ml-3 p-2 rounded-full bg-red-100"
+                      >
+                        <MaterialCommunityIcons name="trash-can-outline" size={18} color="#DC2626" />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+
             {/* Switch aplicar saldo */}
             <View className="mt-5">
               <View className="flex-row items-center justify-between">
-                <Text className="text-gray-900 font-semibold">Aplicar puntos disponibles</Text>
+                <Text className="text-gray-900 font-semibold">Aplicar cashback disponibles</Text>
                 <Switch
                   value={isCustomFlow ? false : wantsRedeem}
                   onValueChange={(v) => {
@@ -1035,10 +1214,8 @@ export default function SellPointsScreen() {
 
             {/* Resumen */}
             <View className="bg-[#0b1220] border border-[#1e293b] rounded-2xl p-4 mt-5">
-              <Row label="Monto" value={currency(amountNumber)} />
-              <Row label="Total puntos en dinero" value={currency(customerBalance)} />
-
-              {/* Avance promo seleccionada */}
+              <Row label="Monto" value={currency(displayedSubtotal)} />
+              <Row label="Total cashback" value={currency(customerBalance)} />
               {selectedProduct && userValid && (
                 <View className="mt-3">
                   <Text className="text-gray-300 mb-2">
@@ -1074,31 +1251,51 @@ export default function SellPointsScreen() {
                 </View>
               )}
 
-              <Row label="Monto aplicado" value={currency(totalAfterRedeem)} strong />
+              <Row label="Monto aplicado" value={currency(appliedAmount)} strong />
+              <Row label="Total a cobrar" value={currency(totalToCharge)} />
             </View>
 
-            {/* Confirmar */}
-            <Pressable
-              onPress={handleSubmit}
-              disabled={
-                loadingSubmit ||
-                bizLoading ||
-                !!bizError ||
-                userValid !== true ||
-                (isCustomFlow && !actionType)
-              }
-              className={`mt-5 py-4 rounded-2xl items-center ${
-                loadingSubmit || userValid !== true || (isCustomFlow && !actionType)
-                  ? "bg-blue-300"
-                  : "bg-green-500"
-              }`}
-            >
-              {loadingSubmit ? (
-                <ActivityIndicator color="#0b1220" />
-              ) : (
-                <Text className="text-[#0b1220] font-extrabold">Confirmar</Text>
-              )}
-            </Pressable>
+            {/* Acción: Confirmar o Limpiar carrito */}
+            <View className="flex-row gap-3 mt-5">
+              <Pressable
+                onPress={() => {
+                  // Confirmar -> submit
+                  handleSubmit();
+                }}
+                disabled={
+                  loadingSubmit ||
+                  bizLoading ||
+                  !!bizError ||
+                  userValid !== true ||
+                  (isCustomFlow && !actionType)
+                }
+                className={`flex-1 py-4 rounded-2xl items-center ${
+                  loadingSubmit || userValid !== true || (isCustomFlow && !actionType)
+                    ? "bg-blue-300"
+                    : "bg-green-500"
+                }`}
+              >
+                {loadingSubmit ? (
+                  <ActivityIndicator color="#0b1220" />
+                ) : (
+                  <Text className="text-[#0b1220] font-extrabold">Confirmar</Text>
+                )}
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  // limpiar sólo el carrito y campos de item
+                  setCart([]);
+                  setArticle("");
+                  setAmount("");
+                  setQty("1");
+                  setDescription("");
+                }}
+                className="flex-0 py-4 px-4 rounded-2xl items-center bg-gray-200"
+              >
+                <Text className="text-gray-800 font-semibold">Limpiar carrito</Text>
+              </Pressable>
+            </View>
           </ScrollView>
         </View>
       </Safe>
@@ -1124,12 +1321,47 @@ export default function SellPointsScreen() {
               </Text>
             </View>
 
+            <View className="max-h-64 mb-3 overflow-y-auto">
+              {/* resumen rápido en el modal */}
+              <View className="mb-2">
+                {waContext?.cartItems && waContext.cartItems.length ? (
+                  waContext.cartItems.map((it: any, i: number) => (
+                    <View key={i} className="flex-row justify-between py-1">
+                      <Text className="text-slate-700">{`${i + 1}. ${it.articulo} x ${it.cantidad}`}</Text>
+                      <Text className="text-slate-700">{currency(it.monto * it.cantidad)}</Text>
+                    </View>
+                  ))
+                ) : waContext?.article ? (
+                  <View className="flex-row justify-between py-1">
+                    <Text className="text-slate-700">{waContext.article}</Text>
+                    <Text className="text-slate-700">{currency(waContext.amount)}</Text>
+                  </View>
+                ) : (
+                  <Text className="text-slate-500">Sin detalles</Text>
+                )}
+              </View>
+
+              <View className="flex-row justify-between mt-2">
+                <Text className="text-slate-700">Subtotal</Text>
+                <Text className="text-slate-700">{currency(waContext?.amount ?? displayedSubtotal)}</Text>
+              </View>
+              <View className="flex-row justify-between mt-2">
+                <Text className="text-slate-700">Cashback aplicados</Text>
+                <Text className="text-slate-700">{currency(waContext?.applied ?? appliedAmount)}</Text>
+              </View>
+              <View className="flex-row justify-between mt-2">
+                <Text className="font-extrabold">Total</Text>
+                <Text className="font-extrabold">{currency(waContext?.total ?? totalToCharge)}</Text>
+              </View>
+            </View>
+
             <View className="flex-row gap-3 mt-4">
               <Pressable
                 className="flex-1 py-3 rounded-2xl border border-slate-300 items-center"
                 onPress={() => {
                   setWaModalVisible(false);
-                  clearForm();
+                  // después de NO → limpiar formulario y carrito si se enviaron (porque ya se hizo el submit)
+                  clearFormAndCart();
                 }}
               >
                 <Text className="text-slate-700 font-semibold">NO</Text>
@@ -1155,11 +1387,12 @@ export default function SellPointsScreen() {
                       porcentaje: waContext.porcentaje ?? null,
                       estado: waContext.estado ?? null,
                       cantidadPromo: waContext.cantidadPromo ?? null,
+                      cartItems: waContext.cartItems ?? [],
                     });
                     await sendWhatsApp(waContext.toPhone, msg);
                   }
                   setWaModalVisible(false);
-                  clearForm();
+                  clearFormAndCart();
                 }}
               >
                 <Text className="text-white font-extrabold">SÍ</Text>

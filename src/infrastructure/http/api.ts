@@ -2,6 +2,8 @@
 import axios, { AxiosError } from "axios";
 
 const BASE_URL = "http://192.168.1.9:5137/api";
+// const BASE_URL =
+//   "https://pymefiel-back-qa-f8g8dgeef7cjg5gd.canadacentral-01.azurewebsites.net/api";
 
 const create = () => {
   const i = axios.create({

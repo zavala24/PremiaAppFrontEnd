@@ -1,18 +1,26 @@
-// src/application/services/SellService.ts
-
-import { InsertSellPayload, InsertSellResponse, ISellRepository } from "../../domain/repositories/ISellRepository";
+import {
+  InsertSellPayload,
+  InsertManySellsPayload
+} from "../../domain/entities/Sell";
+import {
+  InsertSellResponse,
+  InsertManySellsResponse,
+  ISellRepository
+} from "../../domain/repositories/ISellRepository";
 import { ISellService } from "../interfaces/ISellService";
 
-
 export class SellService implements ISellService {
-  private repository: ISellRepository;
+  constructor(private repository: ISellRepository) {}
 
-  constructor(repository: ISellRepository) {
-    this.repository = repository;
+  async insertSellByUserPhoneNumber(
+    payload: InsertSellPayload
+  ): Promise<InsertSellResponse> {
+    return this.repository.insertSellByUserPhoneNumber(payload);
   }
 
-  async insertSellByUserPhoneNumber(payload: InsertSellPayload): Promise<InsertSellResponse> {
-    // Aquí podrías agregar validaciones de negocio si es necesario
-    return await this.repository.insertSellByUserPhoneNumber(payload);
+  async insertManySellsByUserPhoneNumber(
+    payload: InsertManySellsPayload
+  ): Promise<InsertManySellsResponse> {
+    return this.repository.insertManySellsByUserPhoneNumber(payload);
   }
 }
