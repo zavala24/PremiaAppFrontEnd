@@ -81,6 +81,9 @@ export default function NotificationsScreen() {
   const [localQuery, setLocalQuery] = useState("");
   const [query, setQuery] = useState<string | undefined>(undefined);
 
+  // Tarjeta expandida
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+
   // Debounce
   useEffect(() => {
     const t = setTimeout(() => {
@@ -160,7 +163,7 @@ export default function NotificationsScreen() {
       let group = sec.groups.find((g) => g.negocioNombre === it.businessName);
       if (!group) {
         group = {
-          negocioNombre: it.businessName,
+          negocioNombre: it.businessName || "Negocio",
           urlLogo: it.logoUrl ?? null,
           items: [],
         };
@@ -180,41 +183,105 @@ export default function NotificationsScreen() {
   }, [items]);
 
   // UI helpers
-  const BusinessHeader = ({
-    name,
-    url,
-  }: {
+  type BusinessHeaderProps = {
     name: string;
     url?: string | null;
-  }) => (
-    <View className="flex-row items-center mt-3 mb-1">
+    onPress?: () => void;
+  };
+
+  // AHORA ES PRESSABLE (puedes tocar imagen/nombre)
+  const BusinessHeader = ({ name, url, onPress }: BusinessHeaderProps) => (
+    <Pressable
+      className="flex-row items-center mt-3 mb-1"
+      onPress={onPress}
+      android_ripple={{ color: "#DBEAFE" }}
+    >
       {url ? (
         <Image source={{ uri: url }} className="h-8 w-8 rounded-full bg-blue-50" />
       ) : (
         <View className="h-8 w-8 rounded-full bg-blue-50 items-center justify-center">
-          <MaterialCommunityIcons name="storefront-outline" size={18} color="#2563EB" />
+          <MaterialCommunityIcons
+            name="storefront-outline"
+            size={18}
+            color="#2563EB"
+          />
         </View>
       )}
-      <Text className="ml-2 text-[13px] font-extrabold text-slate-900">
-        {name}
+      <Text
+        className="ml-2 text-[13px] font-extrabold text-slate-900 flex-1"
+        numberOfLines={1}
+        ellipsizeMode="tail"
+      >
+        {name || "Negocio"}
       </Text>
-    </View>
+    </Pressable>
   );
 
-  const NotificationItem = ({ it }: { it: AppNotification }) => (
-    <View className="p-3 rounded-xl bg-white border border-blue-100 mt-2">
-      <Text className="text-[12.5px] font-bold text-blue-800">{it.title}</Text>
-      <Text className="text-[12px] text-slate-600 mt-1">{it.body}</Text>
-    </View>
+  type NotificationItemProps = {
+    it: AppNotification;
+    expanded: boolean;
+    onToggle: () => void;
+  };
+
+  const NotificationItem = ({ it, expanded, onToggle }: NotificationItemProps) => (
+    <Pressable
+      onPress={onToggle}
+      className={`mt-2 rounded-xl border border-blue-100 bg-white ${
+        expanded ? "p-4" : "p-3"
+      }`}
+    >
+      {/* Logo grande cuando está expandida */}
+      {it.logoUrl && expanded && (
+        <Image
+          source={{ uri: it.logoUrl }}
+          className="mb-3 w-full h-40 rounded-xl"
+          resizeMode="contain"
+        />
+      )}
+
+      <Text
+        className={`font-bold text-blue-800 ${
+          expanded ? "text-[13px]" : "text-[12.5px]"
+        }`}
+      >
+        {it.title}
+      </Text>
+
+      <Text
+        className="mt-1 text-[12px] text-slate-600"
+        numberOfLines={expanded ? undefined : 3}
+      >
+        {it.body}
+      </Text>
+
+      <View className="mt-2 flex-row items-center justify-end">
+        <Text className="mr-1 text-[11px] text-slate-500">
+          {expanded ? "Ver menos" : "Ver más"}
+        </Text>
+        <MaterialCommunityIcons
+          name={expanded ? "chevron-up" : "chevron-down"}
+          size={16}
+          color="#6B7280"
+        />
+      </View>
+    </Pressable>
   );
 
   // Tarjeta por fecha
-  const DateSectionCard = ({ section }: { section: SectionByDate }) => (
+  type DateSectionCardProps = {
+    section: SectionByDate;
+  };
+
+  const DateSectionCard = ({ section }: DateSectionCardProps) => (
     <View className="mt-4">
       <View className="rounded-2xl border border-blue-100 bg-blue-50/40 shadow-sm">
         {/* Encabezado del card (fecha) */}
         <View className="px-4 py-3 border-b border-blue-100 flex-row items-center">
-          <MaterialCommunityIcons name="calendar-blank-outline" size={18} color="#1D4ED8" />
+          <MaterialCommunityIcons
+            name="calendar-blank-outline"
+            size={18}
+            color="#1D4ED8"
+          />
           <Text className="ml-2 text-[15px] font-extrabold text-blue-900">
             {section.dateLabel}
           </Text>
@@ -222,14 +289,37 @@ export default function NotificationsScreen() {
 
         {/* Contenido del día */}
         <View className="px-4 pb-4 pt-1">
-          {section.groups.map((g, idx) => (
-            <View key={`${section.dateKey}-${g.negocioNombre}-${idx}`}>
-              <BusinessHeader name={g.negocioNombre} url={g.urlLogo} />
-              {g.items.map((n) => (
-                <NotificationItem key={n.id} it={n} />
-              ))}
-            </View>
-          ))}
+          {section.groups.map((g, idx) => {
+            const firstNotification = g.items[0];
+
+            return (
+              <View key={`${section.dateKey}-${g.negocioNombre}-${idx}`}>
+                {/* Al tocar la imagen/nombre también toggles la expansión
+                   de la PRIMERA notificación del negocio */}
+                <BusinessHeader
+                  name={g.negocioNombre}
+                  url={g.urlLogo}
+                  onPress={() => {
+                    if (!firstNotification) return;
+                    setExpandedId((prev) =>
+                      prev === firstNotification.id ? null : firstNotification.id
+                    );
+                  }}
+                />
+
+                {g.items.map((n) => (
+                  <NotificationItem
+                    key={n.id}
+                    it={n}
+                    expanded={expandedId === n.id}
+                    onToggle={() =>
+                      setExpandedId((prev) => (prev === n.id ? null : n.id))
+                    }
+                  />
+                ))}
+              </View>
+            );
+          })}
         </View>
       </View>
     </View>
@@ -240,15 +330,23 @@ export default function NotificationsScreen() {
       <StatusBar barStyle="light-content" />
 
       {/* Burbujas decorativas */}
-      <View pointerEvents="none" className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-blue-400/25" />
-      <View pointerEvents="none" className="absolute -bottom-28 -left-28 h-80 w-80 rounded-full bg-blue-800/25" />
+      <View
+        pointerEvents="none"
+        className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-blue-400/25"
+      />
+      <View
+        pointerEvents="none"
+        className="absolute -bottom-28 -left-28 h-80 w-80 rounded-full bg-blue-800/25"
+      />
 
       <Safe className="flex-1 px-4 pb-2" edges={["top", "left", "right"]}>
         <View className="flex-1 bg-white rounded-3xl p-6 border border-blue-100 shadow-2xl mt-16">
           {/* Header */}
           <View className="items-center mb-1">
             <MaterialCommunityIcons name="tag-outline" size={24} color="#1D4ED8" />
-            <Text className="text-3xl font-black text-blue-700 mt-1">Promociones</Text>
+            <Text className="text-3xl font-black text-blue-700 mt-1">
+              Promociones
+            </Text>
             <Text className="text-slate-500 text-center mt-1">
               Ofertas y anuncios de los negocios que sigues
             </Text>
@@ -265,13 +363,19 @@ export default function NotificationsScreen() {
               className="flex-1 ml-2 text-base text-slate-800 py-0"
               style={{
                 paddingVertical: 0,
-                ...(Platform.OS === "android" ? { textAlignVertical: "center" as const } : null),
+                ...(Platform.OS === "android"
+                  ? { textAlignVertical: "center" as const }
+                  : null),
               }}
               returnKeyType="search"
             />
             {!!localQuery && (
               <Pressable onPress={() => setLocalQuery("")} className="pl-2">
-                <MaterialCommunityIcons name="close-circle-outline" size={18} color="#9CA3AF" />
+                <MaterialCommunityIcons
+                  name="close-circle-outline"
+                  size={18}
+                  color="#9CA3AF"
+                />
               </Pressable>
             )}
           </View>
@@ -294,12 +398,22 @@ export default function NotificationsScreen() {
                 onEndReachedThreshold={0.35}
                 keyboardShouldPersistTaps="handled"
                 refreshControl={
-                  <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1D4ED8" />
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                    tintColor="#1D4ED8"
+                  />
                 }
                 ListEmptyComponent={
                   <View className="items-center mt-16">
-                    <MaterialCommunityIcons name="tag-off-outline" size={36} color="#93C5FD" />
-                    <Text className="text-blue-800/70 mt-2">No hay promociones por ahora</Text>
+                    <MaterialCommunityIcons
+                      name="tag-off-outline"
+                      size={36}
+                      color="#93C5FD"
+                    />
+                    <Text className="text-blue-800/70 mt-2">
+                      No hay promociones por ahora
+                    </Text>
                   </View>
                 }
                 ListFooterComponent={
