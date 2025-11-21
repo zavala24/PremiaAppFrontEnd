@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "PremiaApp",
-    "slug": "PremiaApp",
+    "name": "PyMe Fiel",
+    "slug": "pymefiel",
     "android": {
       "package": "com.apppymespuntos",
       "googleServicesFile": "./google-services.json",
