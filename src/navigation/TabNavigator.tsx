@@ -4,7 +4,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 
 import HomeScreen from "../screens/HomeScreen";
-import SellPointsScreen from "../screens/SellPointsScreen";
+import SellPointsScreen from "../screens/SellPointsScreen/SellPointsScreen";
 import NotificationsScreen from "../screens/NotificationsScreen";
 import { useAuth } from "../presentation/context/AuthContext";
 
