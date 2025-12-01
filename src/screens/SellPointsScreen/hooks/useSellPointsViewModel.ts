@@ -98,7 +98,6 @@ export const useSellPointsViewModel = () => {
     if (selectedProduct) {
         setArticle(selectedProduct.nombreProducto);
         if (customer.valid && phone.length === 10) {
-            // Traer progreso para mostrarlo visualmente
             const fetchProgress = async () => {
                 try {
                     const params = { idNegocio: business.idNegocio, telefonoCliente: onlyDigits(phone), idProductoCustom: selectedProduct.idProductoCustom };
@@ -135,10 +134,11 @@ export const useSellPointsViewModel = () => {
   const addToCart = () => {
     if (customer.valid !== true) return Alert.alert("Error", "Valida usuario primero");
     const m = fixMoney(Number(amount.replace(",", ".")));
-    if (!(m > 0) && !selectedProduct) return Toast.show({ type: "error", text1: "Monto inválido" });
+    
+    // Validación: Si es custom, permitimos monto 0 (ej. canjeo), si es normal, debe ser > 0
+    if (!selectedProduct && !(m > 0)) return Toast.show({ type: "error", text1: "Monto inválido" });
     if (!article.trim()) return Toast.show({ type: "error", text1: "Ingresa el artículo" });
 
-    // Si es custom, DEBE tener acción seleccionada
     if (selectedProduct && !actionType) {
         return Toast.show({ type: "error", text1: "Selecciona Acumular o Canjear" });
     }
@@ -151,7 +151,7 @@ export const useSellPointsViewModel = () => {
         cantidad: qtyNumber,
         esCustom: !!selectedProduct,
         idProductoCustom: selectedProduct?.idProductoCustom ?? null,
-        customAction: selectedProduct ? actionType : null // <--- GUARDAMOS LA ACCIÓN AQUÍ
+        customAction: selectedProduct ? actionType : null 
     };
 
     setCart(prev => [...prev, newItem]);
@@ -161,86 +161,112 @@ export const useSellPointsViewModel = () => {
     setSelectedProduct(null); setActionType(null);
   };
 
+  // --- LOGIC: Submit (SEPARACIÓN DE FLUJOS) ---
   const handleSubmit = async () => {
     const p = onlyDigits(phone);
     if (p.length !== 10 || customer.valid !== true) return Toast.show({ type: "error", text1: "Verifica usuario/teléfono" });
     if (cart.length === 0) return Toast.show({ type: "error", text1: "Carrito vacío" });
 
-    // Validar monto solo si no son puras cosas gratis/custom
-    const cartSubtotal = cart.reduce((s, i) => s + (i.monto * i.cantidad), 0);
-    const displayedSubtotal = fixMoney(cartSubtotal);
-    
-    // Si el total es 0, permitimos continuar SOLO si hay items custom (ej. canjeo gratis)
-    const hasCustomItems = cart.some(i => i.esCustom);
-    if (displayedSubtotal <= 0 && !hasCustomItems) {
-        return Toast.show({ type: "error", text1: "Monto inválido" });
-    }
-
-    const appliedAmount = wantsRedeem ? Math.min(customer.balance, displayedSubtotal) : 0;
-    const totalToCharge = fixMoney(Math.max(0, displayedSubtotal - appliedAmount));
-    const saldoDespues = fixMoney(customer.balance - appliedAmount);
+    // 1. SEPARAMOS LOS ÍTEMS
+    const itemsVenta = cart.filter(it => !it.esCustom); // Normales (Dinero)
+    const itemsCustom = cart.filter(it => it.esCustom); // Custom (Sellos)
 
     setLoading(prev => ({ ...prev, submit: true }));
 
+    // Variables para totales (WhatsApp)
+    let totalMonetario = 0;
+    let totalDescuento = 0;
+    let totalCobradoFinal = 0;
+    let saldoFinalCliente = customer.balance;
+
     try {
-        // 1. REGISTRAR VENTA MONETARIA / HISTORIAL
-        // ----------------------------------------------------
-        const payload = {
-            TelefonoCliente: p,
-            NegocioId: business.idNegocio,
-            CreadoPor: user?.telefono ?? "",
-            Ventas: cart.map(it => ({
-                Articulo: it.articulo,
-                Descripcion: it.descripcion,
-                Monto: it.monto,
-                Cantidad: it.cantidad,
-                PuntosAplicados: wantsRedeem, 
-                SaldoAntes: customer.balance,
-                EsCustom: it.esCustom ?? false,
-                IdProductoCustom: it.idProductoCustom ?? null,
-                CustomAccion: it.customAction // Enviamos esto al back por si acaso
-            }))
-        };
+        // ============================================
+        // A. PROCESAR VENTAS NORMALES (DINERO / CASHBACK)
+        // ============================================
+        if (itemsVenta.length > 0) {
+            const subtotalVenta = itemsVenta.reduce((s, i) => s + (i.monto * i.cantidad), 0);
+            const subtotalDisplay = fixMoney(subtotalVenta);
+            
+            // Validar que la parte monetaria sea lógica
+            if (!(subtotalDisplay > 0)) {
+                setLoading(prev => ({ ...prev, submit: false }));
+                return Toast.show({ type: "error", text1: "La venta normal debe tener monto > 0" });
+            }
 
-        const { resp } = await (sellService as any).insertManySellsByUserPhoneNumber(payload);
-        if (!resp?.success) throw new Error("Error registrando ventas");
+            // Aplicar puntos SOLO a la parte normal
+            const applied = wantsRedeem ? Math.min(customer.balance, subtotalDisplay) : 0;
+            const toCharge = fixMoney(Math.max(0, subtotalDisplay - applied));
+            
+            // Actualizamos variables globales para el ticket
+            totalMonetario = subtotalDisplay;
+            totalDescuento = applied;
+            totalCobradoFinal = toCharge;
+            saldoFinalCliente = fixMoney(customer.balance - applied);
 
-        // 2. PROCESAR LÓGICA DE PUNTOS CUSTOM (Recuperada)
-        // ----------------------------------------------------
-        // Iteramos el carrito y llamamos a los servicios individuales
-        const customPromises = cart
-            .filter(it => it.esCustom && it.idProductoCustom) // Solo items custom
-            .map(async (it) => {
-                const reqBase = {
-                    usuario: (user as any)?.usuarioNombre ?? "App",
-                    usuarioOperacion: user?.telefono ?? "",
-                    telefonoCliente: p,
-                    idProductoCustom: it.idProductoCustom!,
-                    cantidad: it.cantidad,
-                    monto: it.monto,
-                    descripcion: it.descripcion,
-                    idNegocio: business.idNegocio
-                };
+            const payload = {
+                TelefonoCliente: p,
+                NegocioId: business.idNegocio,
+                CreadoPor: user?.telefono ?? "",
+                Ventas: itemsVenta.map(it => ({
+                    Articulo: it.articulo,
+                    Descripcion: it.descripcion,
+                    Monto: it.monto,
+                    Cantidad: it.cantidad,
+                    PuntosAplicados: wantsRedeem, 
+                    SaldoAntes: customer.balance
+                }))
+            };
 
-                if (it.customAction === "acumular") {
-                    // Ignoramos errores individuales para no bloquear el flujo completo, pero idealmente se loguean
-                    return productosService.acumularProgresoCustom(reqBase as any).catch(e => console.log("Error acumular", e));
-                } else if (it.customAction === "canjear") {
-                    return productosService.canjearProgresoCustom(reqBase as any).catch(e => console.log("Error canjear", e));
-                }
-            });
+            const { resp } = await (sellService as any).insertManySellsByUserPhoneNumber(payload);
+            if (!resp?.success) throw new Error("Error registrando ventas normales");
+        }
 
-        // Esperamos a que todas las operaciones custom terminen
+        // ============================================
+        // B. PROCESAR VENTAS CUSTOM (SOLO ACUMULAR/CANJEAR)
+        // ============================================
+        // Estos ítems NO van a InsertMany, van directo a sus servicios.
+        
+        const customPromises = itemsCustom.map(async (it) => {
+             // Opcional: Sumar al total del ticket visual si tienen monto, 
+             // aunque no se guarden en ventas.
+             totalMonetario += (it.monto * it.cantidad);
+             totalCobradoFinal += (it.monto * it.cantidad);
+
+             const reqBase = {
+                usuario: (user as any)?.usuarioNombre ?? "App",
+                usuarioOperacion: user?.telefono ?? "",
+                telefonoCliente: p,
+                idProductoCustom: it.idProductoCustom!,
+                cantidad: it.cantidad,
+                monto: it.monto,
+                descripcion: it.descripcion,
+                idNegocio: business.idNegocio
+            };
+
+            if (it.customAction === "acumular") {
+                return productosService.acumularProgresoCustom(reqBase as any).catch(e => console.log("Err Acumular", e));
+            } else if (it.customAction === "canjear") {
+                return productosService.canjearProgresoCustom(reqBase as any).catch(e => console.log("Err Canjear", e));
+            }
+        });
+
         if (customPromises.length > 0) {
             await Promise.all(customPromises);
         }
 
-        // 3. ÉXITO FINAL
+        // ============================================
+        // C. FINALIZAR
+        // ============================================
+        
         setWaContext({
             toPhone: p, businessName: business?.name, customerName: customer.name,
-            article: null, amount: displayedSubtotal, applied: appliedAmount,
-            total: totalToCharge, saldoAntes: customer.balance,
-            saldoDespues: saldoDespues,
+            article: null, 
+            amount: fixMoney(totalMonetario), 
+            applied: fixMoney(totalDescuento),
+            total: fixMoney(totalCobradoFinal), 
+            saldoAntes: customer.balance,
+            saldoDespues: saldoFinalCliente,
+            // En el ticket mostramos TODO junto
             cartItems: cart.map(c => ({ 
                 articulo: c.articulo + (c.esCustom ? ` (${c.customAction})` : ""), 
                 cantidad: c.cantidad, 
@@ -248,7 +274,7 @@ export const useSellPointsViewModel = () => {
             }))
         });
 
-        Toast.show({ type: "success", text1: "Venta registrada correctamente" });
+        Toast.show({ type: "success", text1: "Operación realizada con éxito" });
         waTimerRef.current = setTimeout(() => setWaModalVisible(true), 1200);
 
     } catch (e: any) {
@@ -273,9 +299,21 @@ export const useSellPointsViewModel = () => {
       clearForm();
   };
 
-  const cartSubtotal = cart.reduce((acc, el) => acc + (el.monto * el.cantidad), 0);
-  const currentAmount = fixMoney(cartSubtotal); 
-  const appliedAmount = wantsRedeem ? Math.min(customer.balance, currentAmount) : 0;
+  // --- CÁLCULOS VISUALES PARA LA PANTALLA ---
+  // Nota: Para la pantalla, si quieres que el switch de "Aplicar Puntos" 
+  // SOLO descuente dinero de los productos NO custom, debemos filtrar aquí también.
+  
+  const itemsVentaVisual = cart.filter(it => !it.esCustom);
+  const itemsCustomVisual = cart.filter(it => it.esCustom);
+
+  const subtotalVenta = itemsVentaVisual.reduce((acc, el) => acc + (el.monto * el.cantidad), 0);
+  const subtotalCustom = itemsCustomVisual.reduce((acc, el) => acc + (el.monto * el.cantidad), 0); // Solo informativo
+
+  const currentAmount = fixMoney(subtotalVenta + subtotalCustom); 
+  
+  // El descuento SOLO aplica sobre lo que es venta normal (subtotalVenta)
+  const appliedAmount = wantsRedeem ? Math.min(customer.balance, fixMoney(subtotalVenta)) : 0;
+  
   const totalToCharge = fixMoney(Math.max(0, currentAmount - appliedAmount));
   const availableBalanceDisplay = fixMoney(customer.balance - appliedAmount);
 
