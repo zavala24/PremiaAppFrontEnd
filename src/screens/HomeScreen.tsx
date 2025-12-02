@@ -1,3 +1,4 @@
+// src/screens/HomeScreen.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View as RNView,
@@ -42,6 +43,17 @@ const Pressable = styled(RNPressable);
 const Image = styled(RNImage);
 const Safe = styled(SafeAreaView);
 
+// 1. Definición de la interfaz de progreso
+interface ProductoProgreso {
+  idProductoCustom: number;
+  nombreProducto: string;
+  acumulado: number;
+  meta: number;
+  porcentaje: number;
+  estado: string;
+}
+
+// 2. Actualización de UiBusiness
 type UiBusiness = {
   id: number;
   name: string;
@@ -53,6 +65,7 @@ type UiBusiness = {
   direccion?: string | null;
   descripcion?: string | null;
   puntosAcumulados?: number | null;
+  promocionesCustom?: ProductoProgreso[]; // <--- Agregado
 };
 
 type TabKey = "all" | "mine";
@@ -156,6 +169,7 @@ export default function HomeScreen() {
         direccion: b.direccion ?? null,
         descripcion: b.descripcion ?? null,
         puntosAcumulados: null,
+        promocionesCustom: [], // En la lista general no hay promos personales
       })),
     [items]
   );
@@ -174,6 +188,7 @@ export default function HomeScreen() {
     try {
       const { status, data, message } = await businessService.getNegociosSeguidosByTelefono(telefono);
       if (status < 200 || status >= 300) throw new Error(message || "No se pudieron obtener tus negocios.");
+      // 3. Mapeo correcto incluyendo promocionesCustom
       const ui = (data ?? []).map((b) => ({
         id: b.idNegocio,
         name: b.name,
@@ -185,6 +200,7 @@ export default function HomeScreen() {
         direccion: b.direccion,
         descripcion: b.descripcion,
         puntosAcumulados: b.puntosAcumulados,
+        promocionesCustom: b.promocionesCustom, // <--- Importante
       }));
 
       setMyItems(ui);
@@ -284,22 +300,38 @@ export default function HomeScreen() {
     listRef.current?.scrollToOffset({ offset: 0, animated: false });
   }, [tab, localQuery]);
 
-  const gotoDetail = (b: UiBusiness) => {
+  // 4. Función gotoDetail corregida
+const gotoDetail = (b: UiBusiness) => {
+    // 1. INTELIGENCIA: Buscamos si tenemos una versión "mejor" de este negocio en mis seguidos
+    // Si 'b' viene de la lista general, no tiene puntos. Si lo encontramos en 'myItems', usamos ese.
+    const richData = myItems.find((item) => item.id === b.id) ?? b;
+
     navigation.navigate("BusinessDetail", {
       business: {
-        id: b.id,
-        name: b.name,
-        category: b.category ?? null,
-        logoUrl: b.logoUrl ?? null,
-        facebook: b.facebook ?? null,
-        instagram: b.instagram ?? null,
-        sitioWeb: b.sitioWeb ?? null,
-        direccion: b.direccion ?? null,
-        descripcion: b.descripcion ?? null,
+        idNegocio: richData.id,
+        name: richData.name,
+        category: richData.category ?? null,
+        
+        configuracion: {
+            id: 0, 
+            porcentajeVentas: 0, 
+            activo: true, 
+            urlLogo: richData.logoUrl ?? null, 
+            permitirConfiguracionPersonalizada: false 
+        },
+        
+        facebook: richData.facebook ?? null,
+        instagram: richData.instagram ?? null,
+        sitioWeb: richData.sitioWeb ?? null,
+        direccion: richData.direccion ?? null,
+        descripcion: richData.descripcion ?? null,
+        
+        // 2. Aquí usamos los datos del objeto enriquecido
+        puntosAcumulados: richData.puntosAcumulados,
+        promocionesCustom: richData.promocionesCustom, 
       },
     });
   };
-
   const Segmented = () => (
     <View className="mt-4 rounded-2xl bg-blue-50 border border-blue-100 p-1 flex-row">
       {[

@@ -31,6 +31,11 @@ const mapApiBusiness = (n: any): Business => ({
   sitioWeb: n.sitioWeb ?? null,
   direccion: n.direccion ?? null,
   descripcion: n.descripcion ?? null,
+  
+  // === AQUÍ AGREGAMOS LOS CAMPOS FALTANTES ===
+  puntosAcumulados: n.puntosAcumulados ?? 0, 
+  promocionesCustom: n.promocionesCustom ?? [], // <--- ¡ESTA LÍNEA ES LA CLAVE!
+
   configuracion: n?.configuracion
     ? {
         id: n.configuracion.idConfiguracionNegocio,
@@ -40,7 +45,6 @@ const mapApiBusiness = (n: any): Business => ({
         permitirConfiguracionPersonalizada: n.configuracion.permitirConfiguracionPersonalizada
       }
     : null,
-    puntosAcumulados: n.puntosAcumulados ?? n.PuntosAcumulados
 });
 
 export class BusinessRepository implements IBusinessRepository {
@@ -94,7 +98,7 @@ export class BusinessRepository implements IBusinessRepository {
     };
   }
 
-    async getNegociosSeguidosByTelefono(phone: string): Promise<ServiceResponse<Business[]>> {
+  async getNegociosSeguidosByTelefono(phone: string): Promise<ServiceResponse<Business[]>> {
     const { data } = await api.get<ApiResponse<any>>(
       "/Negocio/GetNegociosSeguidosByTelefono",
       { params: { telefono: phone } }
@@ -102,11 +106,12 @@ export class BusinessRepository implements IBusinessRepository {
 
     const raw = data.data;
     const arr: any[] = Array.isArray(raw) ? raw : raw?.items ?? [];
+    
+    // Al llamar a mapApiBusiness aquí, ahora sí incluirá las promocionesCustom
     return {
       status: data.status,
       message: data.message,
       data: arr.map(mapApiBusiness),
     };
   }
-  
 }
