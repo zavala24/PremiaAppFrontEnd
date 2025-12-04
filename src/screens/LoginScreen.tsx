@@ -1,4 +1,3 @@
-// src/screens/LoginScreen.tsx
 import React, { useEffect, useRef, useState } from "react";
 import {
   View as RNView,
@@ -10,6 +9,7 @@ import {
   KeyboardAvoidingView as RNKeyboardAvoidingView,
   Platform,
   Image as RNImage,
+  Dimensions,
 } from "react-native";
 import { styled } from "nativewind";
 import { useNavigation } from "@react-navigation/native";
@@ -43,6 +43,7 @@ type LoginScreenNavigationProp = NativeStackNavigationProp<
 export default function LoginScreen() {
   const navigation = useNavigation<LoginScreenNavigationProp>();
   const { login } = useAuth();
+  const { width } = Dimensions.get("window");
 
   const [phoneNumber, setPhoneNumber] = useState("");
   const [loading, setLoading] = useState(false);
@@ -106,7 +107,6 @@ export default function LoginScreen() {
         text1: "Falta tu número",
         text2: "Ingresa tu número de teléfono",
         position: "top",
-        visibilityTime: 2000,
       });
       return;
     }
@@ -117,7 +117,6 @@ export default function LoginScreen() {
         text1: "Número incompleto",
         text2: "Debes ingresar 10 dígitos.",
         position: "top",
-        visibilityTime: 2000,
       });
       return;
     }
@@ -130,7 +129,6 @@ export default function LoginScreen() {
         text1: "Falta tu contraseña",
         text2: "Requerida para Admin/Superadmin",
         position: "top",
-        visibilityTime: 2000,
       });
       return;
     }
@@ -149,9 +147,9 @@ export default function LoginScreen() {
       } else {
         Toast.show({
           type: "error",
-          text1: result.message || "Error al iniciar sesión",
+          text1: "Error al iniciar sesión",
+          text2: result.message,
           position: "top",
-          visibilityTime: 2000,
         });
       }
     } catch (error: any) {
@@ -161,7 +159,6 @@ export default function LoginScreen() {
         text1: "Error de conexión",
         text2: error?.message || "No se pudo conectar con el servidor",
         position: "top",
-        visibilityTime: 2000,
       });
     }
   };
@@ -170,136 +167,144 @@ export default function LoginScreen() {
 
   return (
     <View className="flex-1 bg-blue-600">
-      <StatusBar barStyle="light-content" />
-      {/* Fondo decorativo sutil */}
-      <View className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-blue-400/25" />
-      <View className="absolute -bottom-28 -left-28 h-80 w-80 rounded-full bg-blue-800/25" />
+      <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
+
+      {/* Decoración de fondo (Círculos sutiles) */}
+      <View className="absolute -top-20 -right-20 h-64 w-64 rounded-full bg-white/10" />
+      <View className="absolute top-40 -left-10 h-32 w-32 rounded-full bg-white/5" />
+      <View className="absolute -bottom-10 -left-10 h-72 w-72 rounded-full bg-blue-800/30" />
 
       <KeyboardAvoidingView
         behavior={Platform.select({ ios: "padding", android: undefined })}
-        className="flex-1 justify-center px-6"
-        keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
+        className="flex-1 justify-center"
       >
-        {/* Tarjeta */}
-        <View className="w-full rounded-3xl bg-white shadow-2xl px-7 pt-2 pb-6">
-          {/* Encabezado */}
-          <View className="items-center mb-3">
-            <Image
-              source={Logo}
-              className="w-52 h-52 mb-0"
-              resizeMode="contain"
-            />
-
-            {/* margin-top NEGATIVO para “comernos” el aire del PNG */}
-            <Text className="text-3xl font-extrabold text-blue-700 -mt-6 mb-1">
-              Bienvenido
-            </Text>
-
-            <Text className="text-gray-500 text-center">
-              Ingresa tu número para continuar
-            </Text>
-          </View>
-
-          {/* Teléfono */}
-          <View className="mb-3">
-            <View className="flex-row items-center rounded-2xl border border-gray-200 bg-[#F9FAFB] px-4 py-3 shadow-sm">
-              <Text className="text-gray-500 mr-2">📱</Text>
-              <TextInput
-                placeholder="Ej. 5512345678"
-                keyboardType="phone-pad"
-                maxLength={10}
-                value={phoneNumber}
-                onChangeText={(t) => setPhoneNumber(t.replace(/[^0-9]/g, ""))}
-                className="flex-1 text-base text-gray-800"
-                placeholderTextColor="#9CA3AF"
-                accessible
-                accessibilityLabel="Número de teléfono"
-                returnKeyType={showPasswordField ? "next" : "done"}
+        <View className="px-6">
+          
+          {/* CARD PRINCIPAL BLANCA */}
+          <View className="bg-white rounded-[32px] px-6 py-8 shadow-2xl shadow-blue-900/25">
+            
+            {/* LOGO E INTRO (Dentro de la tarjeta para fusión perfecta) */}
+            <View className="items-center mb-6">
+              <Image
+                source={Logo}
+                // Tamaño grande y centrado. Al estar sobre blanco, el borde de la imagen desaparece.
+                className="w-40 h-40" 
+                resizeMode="contain"
               />
-
-              {checkingRole && phoneNumber.length === 10 && (
-                <ActivityIndicator size="small" color="#1D4ED8" />
-              )}
+              <Text className="text-2xl font-bold text-slate-800 text-center mt-2">
+                ¡Bienvenido de nuevo!
+              </Text>
+              <Text className="text-slate-400 text-sm mt-1 text-center">
+                Ingresa tus datos para acceder a PyMe Fiel
+              </Text>
             </View>
-            <Text className="text-gray-400 text-xs mt-2">
-              Solo números (10 dígitos).
-            </Text>
-          </View>
 
-          {/* Campo contraseña (visible SOLO si ADMIN/SUPERADMIN) */}
-          {showPasswordField && (
-            <View className="mt-1 mb-1">
-              <View className="flex-row items-center rounded-2xl border border-gray-200 bg-[#F9FAFB] px-4 py-3 shadow-sm">
-                <MaterialCommunityIcons
-                  name="lock-outline"
-                  size={18}
-                  color="#6B7280"
-                />
+            {/* --- FORMULARIO --- */}
+            
+            {/* Input Teléfono */}
+            <View className="mb-4">
+              <Text className="text-slate-600 font-semibold mb-2 ml-1">
+                Teléfono
+              </Text>
+              <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-2xl px-4 h-14 focus:border-blue-500 transition-all">
+                <MaterialCommunityIcons name="phone" size={22} color="#64748B" />
                 <TextInput
-                  placeholder="Contraseña"
-                  placeholderTextColor="#9CA3AF"
-                  secureTextEntry={!showPass}
-                  value={password}
-                  onChangeText={setPassword}
-                  className="flex-1 ml-2 text-base text-gray-800"
-                  returnKeyType="done"
+                  placeholder="55 1234 5678"
+                  keyboardType="phone-pad"
+                  maxLength={10}
+                  value={phoneNumber}
+                  onChangeText={(t) => setPhoneNumber(t.replace(/[^0-9]/g, ""))}
+                  className="flex-1 ml-3 text-lg text-slate-900"
+                  placeholderTextColor="#94A3B8"
+                  returnKeyType={showPasswordField ? "next" : "done"}
                 />
-                <Pressable
-                  onPress={() => setShowPass((s) => !s)}
-                  hitSlop={10}
-                  className="pl-2"
-                >
-                  <MaterialCommunityIcons
-                    name={showPass ? "eye-off-outline" : "eye-outline"}
-                    size={20}
-                    color="#6B7280"
-                  />
-                </Pressable>
+                {checkingRole && (
+                  <ActivityIndicator size="small" color="#2563EB" />
+                )}
               </View>
-              <Text className="text-gray-400 text-xs mt-2">
-                (solo Admin/Superadmin)
-              </Text>
             </View>
-          )}
 
-          {/* Botón principal */}
-          <Pressable
-            disabled={loading}
-            onPress={handleLogin}
-            className={`active:opacity-90 rounded-2xl py-4 items-center mt-4 mb-4 ${
-              loading ? "bg-blue-400" : "bg-blue-700"
-            } shadow-lg shadow-blue-500/30`}
-          >
-            {loading ? (
-              <View className="flex-row items-center">
-                <ActivityIndicator size="small" color="#fff" />
-                <Text className="text-white font-semibold text-base ml-3">
-                  Iniciando…
+            {/* Input Contraseña (Condicional) */}
+            {showPasswordField && (
+              <View className="mb-6">
+                <Text className="text-slate-600 font-semibold mb-2 ml-1">
+                  Contraseña
                 </Text>
+                <View className="flex-row items-center bg-slate-50 border border-slate-200 rounded-2xl px-4 h-14">
+                  <MaterialCommunityIcons
+                    name="lock-outline"
+                    size={22}
+                    color="#64748B"
+                  />
+                  <TextInput
+                    placeholder="••••••••"
+                    placeholderTextColor="#94A3B8"
+                    secureTextEntry={!showPass}
+                    value={password}
+                    onChangeText={setPassword}
+                    className="flex-1 ml-3 text-lg text-slate-900"
+                    returnKeyType="done"
+                  />
+                  <Pressable
+                    onPress={() => setShowPass((s) => !s)}
+                    className="p-2"
+                  >
+                    <MaterialCommunityIcons
+                      name={showPass ? "eye-off-outline" : "eye-outline"}
+                      size={22}
+                      color="#64748B"
+                    />
+                  </Pressable>
+                </View>
+                <View className="flex-row items-center mt-2 ml-1 bg-blue-50 self-start px-2 py-1 rounded-lg">
+                  <MaterialCommunityIcons name="shield-check" size={14} color="#2563EB" />
+                  <Text className="text-blue-700 text-xs ml-1 font-medium">
+                    Acceso Administrativo
+                  </Text>
+                </View>
               </View>
-            ) : (
-              <Text className="text-white font-semibold text-lg">
-                Iniciar sesión
-              </Text>
             )}
-          </Pressable>
 
-          {/* Divider */}
-          <View className="flex-row items-center my-2">
-            <View className="flex-1 h-[1px] bg-gray-200" />
-            <Text className="mx-3 text-gray-400 text-sm">o</Text>
-            <View className="flex-1 h-[1px] bg-gray-200" />
+            {/* Botón Login */}
+            <Pressable
+              onPress={handleLogin}
+              disabled={loading}
+              className={`h-14 rounded-2xl items-center justify-center mt-2 shadow-lg shadow-blue-200 ${
+                loading ? "bg-blue-400" : "bg-blue-600"
+              }`}
+            >
+              {loading ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text className="text-white font-bold text-lg tracking-wide">
+                  Iniciar sesión
+                </Text>
+              )}
+            </Pressable>
+
+            {/* Separador */}
+            <View className="flex-row items-center my-6">
+              <View className="flex-1 h-[1px] bg-slate-200" />
+              <Text className="mx-4 text-slate-400 font-medium text-sm">o continúa con</Text>
+              <View className="flex-1 h-[1px] bg-slate-200" />
+            </View>
+
+            {/* Botón Registro */}
+            <Pressable
+              onPress={() => navigation.navigate("Register")}
+              className="h-14 rounded-2xl items-center justify-center border-2 border-blue-100 bg-blue-50/50 active:bg-blue-100"
+            >
+              <Text className="text-blue-700 font-bold text-lg">
+                Crear cuenta nueva
+              </Text>
+            </Pressable>
           </View>
 
-          {/* CTA registro */}
-          <Pressable
-            className="rounded-2xl border border-blue-700 py-3 items-center bg-white"
-            onPress={() => navigation.navigate("Register")}
-          >
-            <Text className="text-blue-700 font-semibold text-base">
-              Regístrate
-            </Text>
-          </Pressable>
+          {/* Footer discreto fuera de la tarjeta */}
+          <Text className="text-blue-200 text-center text-xs mt-8">
+            PyMe Fiel v1.0.0 • Seguridad y Confianza
+          </Text>
+
         </View>
       </KeyboardAvoidingView>
     </View>

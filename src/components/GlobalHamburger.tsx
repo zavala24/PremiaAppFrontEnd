@@ -1,4 +1,3 @@
-// src/components/GlobalHamburger.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
@@ -8,7 +7,9 @@ import {
   StyleSheet,
   Text,
   View,
-  Image, // 👈 agregado
+  Image,
+  Platform,
+  StatusBar,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
@@ -36,21 +37,30 @@ export default function GlobalHamburger({ show = true }: Props) {
   const [open, setOpen] = useState(false);
 
   const width = Dimensions.get("window").width;
-  const drawerWidth = Math.min(width * 0.8, 320);
+  // Un poco más ancho para que se vea más premium
+  const drawerWidth = Math.min(width * 0.82, 340);
 
   const tx = useRef(new Animated.Value(-drawerWidth)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     tx.setValue(-drawerWidth);
   }, [drawerWidth, tx]);
 
   useEffect(() => {
-    Animated.timing(tx, {
-      toValue: open ? 0 : -drawerWidth,
-      duration: 220,
-      useNativeDriver: true,
-    }).start();
-  }, [open, drawerWidth, tx]);
+    Animated.parallel([
+      Animated.timing(tx, {
+        toValue: open ? 0 : -drawerWidth,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: open ? 1 : 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [open, drawerWidth, tx, fadeAnim]);
 
   useEffect(() => {
     setOpen(false);
@@ -73,17 +83,28 @@ export default function GlobalHamburger({ show = true }: Props) {
       styles.drawer,
       {
         width: drawerWidth,
-        paddingTop: insets.top + 12,
         transform: [{ translateX: tx }],
-        opacity: open ? 1 : 0.999,
+        shadowColor: "#000",
+        shadowOffset: { width: 5, height: 0 },
+        shadowOpacity: open ? 0.3 : 0,
+        shadowRadius: 15,
+        elevation: open ? 20 : 0,
       },
     ],
-    [drawerWidth, insets.top, tx, open]
+    [drawerWidth, tx, open]
   );
 
   const overlayStyle = useMemo(
-    () => [styles.overlay, { opacity: open ? 0.28 : 0 }],
-    [open]
+    () => [
+      styles.overlay, 
+      { 
+        opacity: fadeAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0, 0.4]
+        }) 
+      }
+    ],
+    [fadeAnim]
   );
 
   const goTab = (screen: keyof TabParamList) => {
@@ -103,22 +124,25 @@ export default function GlobalHamburger({ show = true }: Props) {
 
   return (
     <>
-      {/* Botón flotante */}
+      <StatusBar barStyle={open ? "light-content" : "dark-content"} />
+      
+      {/* Botón flotante (Hamburguesa) */}
       <Pressable
         onPress={() => setOpen(true)}
-        style={[
+        style={({ pressed }) => [
           styles.fab,
           {
-            top: insets.top + 10,
+            top: Platform.OS === 'android' ? insets.top + 12 : insets.top + 2,
             zIndex: open ? 1 : 60,
             opacity: open ? 0 : 1,
             pointerEvents: open ? "none" : "auto",
+            transform: [{ scale: pressed ? 0.95 : 1 }]
           },
         ]}
         accessibilityRole="button"
         accessibilityLabel="Abrir menú"
       >
-        <MaterialCommunityIcons name="menu" size={20} color="#1D4ED8" />
+        <MaterialCommunityIcons name="menu" size={24} color="#2563EB" />
       </Pressable>
 
       {/* Overlay */}
@@ -137,59 +161,69 @@ export default function GlobalHamburger({ show = true }: Props) {
         style={drawerStyle}
         pointerEvents={open ? "auto" : "none"}
       >
+        {/* Fondo Gradiente Azul "Super Pro" */}
         <LinearGradient
-          colors={["#1E40AF", "#2563EB"]}
+          colors={["#2563EB", "#1E40AF"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
 
-        <View style={[styles.bubble, { top: 80, left: -40, opacity: 0.12 }]} />
-        <View
-          style={[styles.bubble, { bottom: 100, right: -50, opacity: 0.09 }]}
-        />
+        {/* Decoración de fondo */}
+        <View style={[styles.bubble, { top: -60, right: -60, width: 200, height: 200, opacity: 0.08 }]} />
+        <View style={[styles.bubble, { bottom: 120, left: -40, width: 140, height: 140, opacity: 0.05 }]} />
 
-        {/* 🔵 HEADER con LOGO + usuario */}
-        <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
-          <View style={styles.headerRow}>
-            {/* Logo / avatar */}
-            <View style={styles.brandLogoContainer}>
-              <Image
-                source={Logo}
-                style={styles.brandLogo}
-                resizeMode="contain"
-              />
-            </View>
-
-            {/* Nombre + teléfono */}
-            <View style={{ marginLeft: 10, flex: 1 }}>
-              <Text numberOfLines={1} style={styles.title}>
-                {user?.nombre ?? "Mi cuenta"}
-              </Text>
-              {!!user?.telefono && (
-                <Text numberOfLines={1} style={styles.subtitle}>
-                  {user.telefono}
-                </Text>
-              )}
-            </View>
-
+        {/* 🔵 HEADER */}
+        <View style={{ paddingTop: insets.top + 20, paddingHorizontal: 20, paddingBottom: 30 }}>
             {/* Botón cerrar */}
-            <Pressable onPress={() => setOpen(false)} style={styles.closeBtn}>
-              <MaterialCommunityIcons
-                name="chevron-left"
-                size={22}
-                color="#1D4ED8"
-              />
-            </Pressable>
-          </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 10 }}>
+                 <Pressable 
+                    onPress={() => setOpen(false)} 
+                    style={({pressed}) => [styles.closeBtn, pressed && { opacity: 0.7 }]}
+                 >
+                    <MaterialCommunityIcons name="close" size={20} color="#fff" />
+                 </Pressable>
+            </View>
+
+            <View style={styles.profileContainer}>
+                {/* LOGO ORIGINAL RESTAURADO */}
+                <View style={styles.brandLogoContainer}>
+                    <Image
+                        source={Logo}
+                        style={styles.brandLogo}
+                        resizeMode="contain"
+                    />
+                </View>
+                
+                <View style={{ marginTop: 16 }}>
+                    <Text numberOfLines={1} style={styles.greeting}>Hola,</Text>
+                    <Text numberOfLines={1} style={styles.title}>
+                        {user?.nombre ?? "Mi cuenta"}
+                    </Text>
+                    {!!user?.telefono && (
+                        <View style={styles.phoneBadge}>
+                            <MaterialCommunityIcons name="phone" size={12} color="#fff" style={{ marginRight: 4 }} />
+                            <Text numberOfLines={1} style={styles.subtitle}>
+                                {user.telefono}
+                            </Text>
+                        </View>
+                    )}
+                </View>
+            </View>
         </View>
 
+        <View style={styles.separator} />
 
         {/* MENÚ */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>MENÚ</Text>
+          <Text style={styles.sectionLabel}>NAVEGACIÓN</Text>
 
-          <MenuItem icon="home-outline" label="Home" onPress={() => goTab("Home")} />
+          <MenuItem 
+            icon="home-variant-outline" 
+            label="Inicio" 
+            onPress={() => goTab("Home")} 
+            active={true}
+          />
 
           {isAdmin && (
             <MenuItem
@@ -209,17 +243,19 @@ export default function GlobalHamburger({ show = true }: Props) {
           />
         </View>
 
-        {/* Footer Cerrar sesión */}
-        <View style={[styles.bottom, { paddingBottom: insets.bottom + 12 }]}>
+        {/* Footer */}
+        <View style={[styles.bottom, { paddingBottom: insets.bottom + 20 }]}>
           <Pressable
             onPress={goLogout}
             style={({ pressed }) => [
-              styles.logout,
-              pressed && { opacity: 0.7 },
+              styles.logoutBtn,
+              pressed && { backgroundColor: "rgba(255,255,255,0.2)" },
             ]}
           >
-            <MaterialCommunityIcons name="logout" size={20} color="#FFFFFF" />
-            <Text style={[styles.logoutText, { color: "#FFFFFF" }]}>
+            <View style={styles.logoutIconBg}>
+                <MaterialCommunityIcons name="logout" size={18} color="#fff" />
+            </View>
+            <Text style={styles.logoutText}>
               Cerrar sesión
             </Text>
           </Pressable>
@@ -233,19 +269,29 @@ function MenuItem({
   icon,
   label,
   onPress,
+  active = false
 }: {
   icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
   label: string;
   onPress: () => void;
+  active?: boolean;
 }) {
   return (
-    <Pressable onPress={onPress} style={styles.item}>
-      <MaterialCommunityIcons name={icon} size={20} color="#FFFFFF" />
-      <Text style={styles.itemText}>{label}</Text>
+    <Pressable 
+        onPress={onPress} 
+        style={({pressed}) => [
+            styles.item, 
+            (pressed || active) && styles.itemActive
+        ]}
+    >
+      <View style={[styles.itemIcon, active && { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+        <MaterialCommunityIcons name={icon} size={22} color="#FFFFFF" />
+      </View>
+      <Text style={[styles.itemText, active && { fontWeight: '700' }]}>{label}</Text>
       <MaterialCommunityIcons
         name="chevron-right"
-        size={22}
-        color="#FFFFFF99"
+        size={20}
+        color="rgba(255,255,255,0.5)"
         style={{ marginLeft: "auto" }}
       />
     </Pressable>
@@ -253,84 +299,166 @@ function MenuItem({
 }
 
 const styles = StyleSheet.create({
+  // FAB
   fab: {
     position: "absolute",
-    left: 14,
-    zIndex: 50,
-    height: 36,
-    width: 36,
-    borderRadius: 18,
+    left: 20,
+    height: 44,
+    width: 44,
+    borderRadius: 22,
     backgroundColor: "#fff",
     justifyContent: "center",
     alignItems: "center",
+    shadowColor: "#2563EB",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
     elevation: 4,
-    shadowColor: "#000",
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
   },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "#000" },
-  drawer: { position: "absolute", left: 0, top: 0, bottom: 0, zIndex: 49 },
+  overlay: { 
+    ...StyleSheet.absoluteFillObject, 
+    backgroundColor: "#000" 
+  },
+  drawer: { 
+    position: "absolute", 
+    left: 0, 
+    top: 0, 
+    bottom: 0, 
+    zIndex: 49,
+    borderTopRightRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: 'hidden',
+  },
   bubble: {
     position: "absolute",
-    height: 160,
-    width: 160,
-    borderRadius: 80,
+    borderRadius: 999,
     backgroundColor: "#FFFFFF",
   },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 16,
+  profileContainer: {
+    marginTop: 0,
   },
-  avatar: {
-    height: 34,
-    width: 34,
-    borderRadius: 17,
-    backgroundColor: "#ffffff22",
+  // ESTILOS ORIGINALES DEL LOGO RESTAURADOS 👇
+  brandLogoContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: "#ffffffee", // Fondo blanco sólido/casi sólido
     justifyContent: "center",
     alignItems: "center",
+    marginBottom: 4,
   },
+  brandLogo: {
+    width: 36, // Tamaño original
+    height: 36,
+  },
+  // ----------------------------------------
   closeBtn: {
-    height: 34,
-    width: 34,
-    borderRadius: 17,
-    backgroundColor: "#fff",
+    height: 32,
+    width: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: 8,
   },
-  title: { color: "#fff", fontWeight: "800", fontSize: 16 },
-  subtitle: { color: "#ffffffbb", fontSize: 12, marginTop: 2 },
-  section: { paddingHorizontal: 16, paddingTop: 8 },
+  greeting: {
+    color: "rgba(255,255,255,0.8)",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  title: { 
+    color: "#fff", 
+    fontWeight: "800", 
+    fontSize: 22,
+    letterSpacing: -0.5,
+    marginVertical: 2,
+  },
+  phoneBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  subtitle: { 
+    color: "#fff", 
+    fontSize: 13, 
+    fontWeight: "600" 
+  },
+  separator: {
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    marginHorizontal: 20,
+    marginBottom: 20,
+  },
+  section: { 
+    paddingHorizontal: 16,
+    flex: 1,
+  },
   sectionLabel: {
-    color: "#ffffff99",
-    fontSize: 12,
-    letterSpacing: 1,
-    marginBottom: 8,
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    marginBottom: 10,
+    marginLeft: 12,
   },
-  item: { flexDirection: "row", alignItems: "center", paddingVertical: 12 },
-  itemText: { color: "#fff", marginLeft: 12, fontSize: 15, fontWeight: "600" },
+  item: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    marginBottom: 4,
+  },
+  itemActive: {
+    backgroundColor: "rgba(255,255,255,0.12)",
+  },
+  itemIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  itemText: { 
+    color: "#fff", 
+    marginLeft: 14, 
+    fontSize: 16, 
+    fontWeight: "500" 
+  },
   bottom: {
     position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
+    paddingHorizontal: 20,
+  },
+  logoutBtn: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    paddingVertical: 14,
     paddingHorizontal: 16,
+    backgroundColor: "rgba(0,0,0,0.2)",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
   },
-  logout: { flexDirection: "row", alignItems: "center", paddingVertical: 12 },
-  logoutText: { marginLeft: 12, fontSize: 15, fontWeight: "700" },
-  brandLogoContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: "#ffffffee",
-    justifyContent: "center",
-    alignItems: "center",
+  logoutIconBg: {
+    marginRight: 12,
   },
-  brandLogo: {
-    width: 36, // antes 30
-    height: 36,
+  logoutText: { 
+    color: "#FFFFFF", 
+    fontSize: 15, 
+    fontWeight: "700" 
   },
-
+  versionText: {
+    color: "rgba(255,255,255,0.3)",
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 16,
+  },
 });

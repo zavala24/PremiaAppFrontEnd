@@ -1,4 +1,3 @@
-// src/screens/NotificationsScreen.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View as RNView,
@@ -47,7 +46,6 @@ type SectionByDate = {
 
 const fmtDateLabel = (iso: string) => {
   const d = new Date(iso);
-  // “10 oct 2025”
   return d.toLocaleDateString("es-MX", {
     year: "numeric",
     month: "short",
@@ -189,17 +187,15 @@ export default function NotificationsScreen() {
     onPress?: () => void;
   };
 
-  // AHORA ES PRESSABLE (puedes tocar imagen/nombre)
   const BusinessHeader = ({ name, url, onPress }: BusinessHeaderProps) => (
     <Pressable
-      className="flex-row items-center mt-3 mb-1"
+      className="flex-row items-center mt-4 mb-2"
       onPress={onPress}
-      android_ripple={{ color: "#DBEAFE" }}
     >
       {url ? (
-        <Image source={{ uri: url }} className="h-8 w-8 rounded-full bg-blue-50" />
+        <Image source={{ uri: url }} className="h-9 w-9 rounded-xl bg-slate-100 border border-slate-200" resizeMode="cover" />
       ) : (
-        <View className="h-8 w-8 rounded-full bg-blue-50 items-center justify-center">
+        <View className="h-9 w-9 rounded-xl bg-blue-50 items-center justify-center border border-blue-100">
           <MaterialCommunityIcons
             name="storefront-outline"
             size={18}
@@ -208,7 +204,7 @@ export default function NotificationsScreen() {
         </View>
       )}
       <Text
-        className="ml-2 text-[13px] font-extrabold text-slate-900 flex-1"
+        className="ml-3 text-sm font-bold text-slate-800 flex-1"
         numberOfLines={1}
         ellipsizeMode="tail"
       >
@@ -226,110 +222,118 @@ export default function NotificationsScreen() {
   const NotificationItem = ({ it, expanded, onToggle }: NotificationItemProps) => (
     <Pressable
       onPress={onToggle}
-      className={`mt-2 rounded-xl border border-blue-100 bg-white ${
-        expanded ? "p-4" : "p-3"
+      className={`mb-3 rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden transition-all ${
+        expanded ? "border-blue-200 shadow-md" : ""
       }`}
     >
-      {/* Logo grande cuando está expandida */}
-      {it.logoUrl && expanded && (
-        <Image
-          source={{ uri: it.logoUrl }}
-          className="mb-3 w-full h-40 rounded-xl"
-          resizeMode="contain"
-        />
-      )}
+      <View className="p-4">
+        {/* Header de la notificación */}
+        <View className="flex-row justify-between items-start mb-2">
+            <Text
+                className={`font-bold flex-1 mr-2 ${
+                expanded ? "text-blue-700 text-base" : "text-slate-800 text-sm"
+                }`}
+            >
+                {it.title}
+            </Text>
+            {/* Indicador de estado o nuevo opcional */}
+            {!expanded && (
+                <View className="bg-blue-50 p-1 rounded-full">
+                    <MaterialCommunityIcons name="chevron-down" size={16} color="#3B82F6" />
+                </View>
+            )}
+        </View>
 
-      <Text
-        className={`font-bold text-blue-800 ${
-          expanded ? "text-[13px]" : "text-[12.5px]"
-        }`}
-      >
-        {it.title}
-      </Text>
+        {/* Imagen Expandida */}
+        {it.logoUrl && expanded && (
+            <View className="my-3 rounded-xl overflow-hidden bg-slate-50 border border-slate-100">
+                <Image
+                source={{ uri: it.logoUrl }}
+                className="w-full h-48"
+                resizeMode="cover"
+                />
+            </View>
+        )}
 
-      <Text
-        className="mt-1 text-[12px] text-slate-600"
-        numberOfLines={expanded ? undefined : 3}
-      >
-        {it.body}
-      </Text>
-
-      <View className="mt-2 flex-row items-center justify-end">
-        <Text className="mr-1 text-[11px] text-slate-500">
-          {expanded ? "Ver menos" : "Ver más"}
+        {/* Cuerpo del texto */}
+        <Text
+            className={`text-slate-500 leading-5 ${expanded ? "text-sm" : "text-xs"}`}
+            numberOfLines={expanded ? undefined : 2}
+        >
+            {it.body}
         </Text>
-        <MaterialCommunityIcons
-          name={expanded ? "chevron-up" : "chevron-down"}
-          size={16}
-          color="#6B7280"
-        />
+
+        {/* Footer Expandido */}
+        {expanded && (
+            <View className="mt-4 pt-3 border-t border-slate-100 flex-row justify-end items-center">
+                <Text className="text-xs text-slate-400 mr-1">Toca para colapsar</Text>
+                <MaterialCommunityIcons name="chevron-up" size={16} color="#94A3B8" />
+            </View>
+        )}
       </View>
     </Pressable>
   );
 
-  // Tarjeta por fecha
   type DateSectionCardProps = {
     section: SectionByDate;
   };
 
   const DateSectionCard = ({ section }: DateSectionCardProps) => (
-    <View className="mt-4">
-      <View className="rounded-2xl border border-blue-100 bg-blue-50/40 shadow-sm">
-        {/* Encabezado del card (fecha) */}
-        <View className="px-4 py-3 border-b border-blue-100 flex-row items-center">
-          <MaterialCommunityIcons
-            name="calendar-blank-outline"
-            size={18}
-            color="#1D4ED8"
-          />
-          <Text className="ml-2 text-[15px] font-extrabold text-blue-900">
-            {section.dateLabel}
-          </Text>
+    <View className="mb-6">
+      {/* Etiqueta de Fecha Stickie-like */}
+      <View className="flex-row items-center mb-3 ml-1">
+        <View className="bg-blue-100/50 p-1.5 rounded-lg mr-2">
+            <MaterialCommunityIcons
+            name="calendar-month-outline"
+            size={16}
+            color="#2563EB"
+            />
         </View>
+        <Text className="text-sm font-bold text-slate-500 uppercase tracking-wide">
+          {section.dateLabel}
+        </Text>
+      </View>
 
-        {/* Contenido del día */}
-        <View className="px-4 pb-4 pt-1">
-          {section.groups.map((g, idx) => {
+      {/* Grupos de Negocios */}
+      <View className="pl-2 border-l-2 border-slate-100 ml-3">
+        {section.groups.map((g, idx) => {
             const firstNotification = g.items[0];
-
             return (
-              <View key={`${section.dateKey}-${g.negocioNombre}-${idx}`}>
-                {/* Al tocar la imagen/nombre también toggles la expansión
-                   de la PRIMERA notificación del negocio */}
+            <View key={`${section.dateKey}-${g.negocioNombre}-${idx}`} className="mb-4 pl-3">
+                
                 <BusinessHeader
-                  name={g.negocioNombre}
-                  url={g.urlLogo}
-                  onPress={() => {
-                    if (!firstNotification) return;
-                    setExpandedId((prev) =>
-                      prev === firstNotification.id ? null : firstNotification.id
-                    );
-                  }}
+                    name={g.negocioNombre}
+                    url={g.urlLogo}
+                    onPress={() => {
+                        if (!firstNotification) return;
+                        setExpandedId((prev) =>
+                        prev === firstNotification.id ? null : firstNotification.id
+                        );
+                    }}
                 />
 
                 {g.items.map((n) => (
-                  <NotificationItem
+                <NotificationItem
                     key={n.id}
                     it={n}
                     expanded={expandedId === n.id}
                     onToggle={() =>
-                      setExpandedId((prev) => (prev === n.id ? null : n.id))
+                    setExpandedId((prev) => (prev === n.id ? null : n.id))
                     }
-                  />
+                />
                 ))}
-              </View>
+            </View>
             );
-          })}
-        </View>
+        })}
       </View>
     </View>
   );
 
   return (
     <View className="flex-1 bg-blue-600">
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
 
-      {/* Burbujas decorativas */}
+      {/* Decoración de Fondo */}
       <View
         pointerEvents="none"
         className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-blue-400/25"
@@ -339,93 +343,91 @@ export default function NotificationsScreen() {
         className="absolute -bottom-28 -left-28 h-80 w-80 rounded-full bg-blue-800/25"
       />
 
-      <Safe className="flex-1 px-4 pb-2" edges={["top", "left", "right"]}>
-        <View className="flex-1 bg-white rounded-3xl p-6 border border-blue-100 shadow-2xl mt-16">
-          {/* Header */}
-          <View className="items-center mb-1">
-            <MaterialCommunityIcons name="tag-outline" size={24} color="#1D4ED8" />
-            <Text className="text-3xl font-black text-blue-700 mt-1">
-              Promociones
+      <Safe className="flex-1" edges={["top", "left", "right"]}>
+        
+        {/* HEADER "PREMIUM" */}
+        <View className="h-28 justify-center items-center mt-4 px-4 z-10 mb-6">
+            <View className="w-12 h-12 bg-white/20 rounded-2xl items-center justify-center mb-3">
+                <MaterialCommunityIcons name="bell-ring-outline" size={24} color="white" />
+            </View>
+            <Text className="text-white text-2xl font-extrabold tracking-wide text-center">
+                Promociones
             </Text>
-            <Text className="text-slate-500 text-center mt-1">
-              Ofertas y anuncios de los negocios que sigues
+            <Text className="text-blue-100 text-sm mt-1 text-center font-medium">
+                Ofertas y anuncios de tus negocios favoritos
             </Text>
-          </View>
+        </View>
 
-          {/* Search */}
-          <View className="rounded-full border border-blue-100 bg-white px-4 py-3 shadow-sm flex-row items-center mt-2">
-            <MaterialCommunityIcons name="magnify" size={20} color="#6B7280" />
-            <TextInput
-              value={localQuery}
-              onChangeText={setLocalQuery}
-              placeholder="Buscar negocio"
-              placeholderTextColor="#9CA3AF"
-              className="flex-1 ml-2 text-base text-slate-800 py-0"
-              style={{
-                paddingVertical: 0,
-                ...(Platform.OS === "android"
-                  ? { textAlignVertical: "center" as const }
-                  : null),
-              }}
-              returnKeyType="search"
-            />
-            {!!localQuery && (
-              <Pressable onPress={() => setLocalQuery("")} className="pl-2">
-                <MaterialCommunityIcons
-                  name="close-circle-outline"
-                  size={18}
-                  color="#9CA3AF"
+        {/* CONTENEDOR PRINCIPAL */}
+        <View className="flex-1 bg-slate-50 rounded-t-[32px] pt-6 px-4 shadow-2xl overflow-hidden border-t border-white/20">
+            
+            {/* Buscador */}
+            <View className="flex-row items-center bg-white rounded-2xl border border-slate-200 px-4 py-3 mb-4 shadow-sm">
+                <MaterialCommunityIcons name="magnify" size={22} color="#94A3B8" />
+                <TextInput
+                    value={localQuery}
+                    onChangeText={setLocalQuery}
+                    placeholder="Buscar en notificaciones..."
+                    placeholderTextColor="#94A3B8"
+                    className="flex-1 ml-3 text-base text-slate-800 font-medium"
+                    style={{
+                        paddingVertical: 0,
+                        ...(Platform.OS === "android" ? { textAlignVertical: "center" as const } : null),
+                    }}
+                    returnKeyType="search"
                 />
-              </Pressable>
-            )}
-          </View>
+                {!!localQuery && (
+                    <Pressable onPress={() => setLocalQuery("")} className="bg-slate-100 rounded-full p-1">
+                        <MaterialCommunityIcons name="close" size={16} color="#64748B" />
+                    </Pressable>
+                )}
+            </View>
 
-          {/* Lista por días (cada día = card) */}
-          <View className="flex-1 mt-4">
-            {initialLoading ? (
-              <View className="flex-1 items-center justify-center">
-                <ActivityIndicator color="#1D4ED8" />
-                <Text className="text-blue-800/70 mt-2">Cargando…</Text>
-              </View>
-            ) : (
-              <FlatList
-                data={sections}
-                keyExtractor={(s) => s.dateKey}
-                renderItem={({ item }) => <DateSectionCard section={item} />}
-                contentContainerStyle={{ paddingBottom: 8 + insets.bottom }}
-                showsVerticalScrollIndicator={false}
-                onEndReached={hasNext ? onEndReached : undefined}
-                onEndReachedThreshold={0.35}
-                keyboardShouldPersistTaps="handled"
-                refreshControl={
-                  <RefreshControl
-                    refreshing={refreshing}
-                    onRefresh={onRefresh}
-                    tintColor="#1D4ED8"
-                  />
-                }
-                ListEmptyComponent={
-                  <View className="items-center mt-16">
-                    <MaterialCommunityIcons
-                      name="tag-off-outline"
-                      size={36}
-                      color="#93C5FD"
-                    />
-                    <Text className="text-blue-800/70 mt-2">
-                      No hay promociones por ahora
-                    </Text>
-                  </View>
-                }
-                ListFooterComponent={
-                  loading && hasNext ? (
-                    <View className="py-4">
-                      <ActivityIndicator color="#2563EB" />
+            {/* Lista de Contenido */}
+            <View className="flex-1">
+                {initialLoading ? (
+                    <View className="flex-1 items-center justify-center pb-20">
+                        <ActivityIndicator size="large" color="#2563EB" />
+                        <Text className="text-slate-400 mt-4 font-medium">Cargando promociones...</Text>
                     </View>
-                  ) : null
-                }
-              />
-            )}
-          </View>
+                ) : (
+                    <FlatList
+                        data={sections}
+                        keyExtractor={(s) => s.dateKey}
+                        renderItem={({ item }) => <DateSectionCard section={item} />}
+                        contentContainerStyle={{ paddingBottom: 100, paddingTop: 8 }} // Espacio para scroll y footer
+                        showsVerticalScrollIndicator={false}
+                        onEndReached={hasNext ? onEndReached : undefined}
+                        onEndReachedThreshold={0.35}
+                        refreshControl={
+                            <RefreshControl
+                                refreshing={refreshing}
+                                onRefresh={onRefresh}
+                                tintColor="#2563EB"
+                                colors={["#2563EB"]}
+                            />
+                        }
+                        ListEmptyComponent={
+                            <View className="items-center justify-center py-20 opacity-60">
+                                <View className="bg-slate-200 p-6 rounded-full mb-4">
+                                    <MaterialCommunityIcons name="bell-off-outline" size={48} color="#94A3B8" />
+                                </View>
+                                <Text className="text-slate-400 font-bold text-lg">Sin notificaciones</Text>
+                                <Text className="text-slate-400 text-center text-sm px-10 mt-1">
+                                    Aquí aparecerán las ofertas de los negocios que sigues.
+                                </Text>
+                            </View>
+                        }
+                        ListFooterComponent={
+                            loading && hasNext ? (
+                                <View className="py-4">
+                                    <ActivityIndicator color="#2563EB" />
+                                </View>
+                            ) : null
+                        }
+                    />
+                )}
+            </View>
         </View>
       </Safe>
     </View>

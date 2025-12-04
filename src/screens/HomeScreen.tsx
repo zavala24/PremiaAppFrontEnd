@@ -1,4 +1,3 @@
-// src/screens/HomeScreen.tsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View as RNView,
@@ -13,6 +12,8 @@ import {
   RefreshControl,
   Alert,
   useWindowDimensions,
+  TouchableOpacity as RNTouchableOpacity, 
+  Modal,
 } from "react-native";
 import { styled } from "nativewind";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -21,29 +22,30 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+// Firebase modular RNFirebase
+import { getApp } from "@react-native-firebase/app";
+import { getMessaging, getToken, onTokenRefresh } from "@react-native-firebase/messaging";
+
+// Imports de tu proyecto
 import type { RootStackParamList } from "../navigation/StackNavigator";
 import { useAuth } from "../presentation/context/AuthContext";
 import { useBusinessesPaged, ApiBusiness } from "../presentation/hooks/useBusinessPaged";
 import { BusinessService } from "../application/services/BusinessService";
 import { BusinessRepository } from "../infrastructure/repositories/BusinessRepository";
 import { IBusinessService } from "../application/interfaces/IBusinessService";
-
-// Firebase modular RNFirebase
-import { getApp } from "@react-native-firebase/app";
-import { getMessaging, getToken, onTokenRefresh } from "@react-native-firebase/messaging";
-
-// Token repo
 import { TokenRepository } from "../infrastructure/repositories/TokenRepository";
 import { InsertTokenPayload } from "../domain/repositories/ITokenRepository";
 
+// Styled Components
 const View = styled(RNView);
 const Text = styled(RNText);
 const TextInput = styled(RNTextInput);
 const Pressable = styled(RNPressable);
 const Image = styled(RNImage);
 const Safe = styled(SafeAreaView);
+const TouchableOpacity = styled(RNTouchableOpacity);
 
-// 1. Definición de la interfaz de progreso
+// --- TIPOS ---
 interface ProductoProgreso {
   idProductoCustom: number;
   nombreProducto: string;
@@ -53,7 +55,6 @@ interface ProductoProgreso {
   estado: string;
 }
 
-// 2. Actualización de UiBusiness
 type UiBusiness = {
   id: number;
   name: string;
@@ -65,12 +66,13 @@ type UiBusiness = {
   direccion?: string | null;
   descripcion?: string | null;
   puntosAcumulados?: number | null;
-  promocionesCustom?: ProductoProgreso[]; // <--- Agregado
+  promocionesCustom?: ProductoProgreso[];
 };
 
 type TabKey = "all" | "mine";
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
+// --- UTILIDADES ---
 const currency = (n?: number | null) =>
   new Intl.NumberFormat("es-MX", {
     style: "currency",
@@ -79,10 +81,10 @@ const currency = (n?: number | null) =>
     maximumFractionDigits: 2,
   }).format(typeof n === "number" ? n : 0);
 
-// =================== Sync FCM token ===================
 const tokenKey = (tel: string) => `fcmToken:${tel}`;
 const onlyDigits = (s: string) => (s || "").replace(/\D+/g, "");
 
+// --- HOOKS ---
 function useDeviceTokenSync(telefono?: string) {
   const repo = useMemo(() => new TokenRepository(), []);
 
@@ -125,21 +127,24 @@ function useDeviceTokenSync(telefono?: string) {
     };
   }, [telefono, repo]);
 }
-// ======================================================
 
+// =================== PANTALLA PRINCIPAL ===================
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
-  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-
-  const columns = width >= 768 ? 3 : width >= 360 ? 2 : 1;
-  const isMultiCol = columns > 1;
+  
+  // Lógica de columnas (para Tablets usa grid, para móvil lista)
+  const isTablet = width >= 768;
+  const columns = isTablet ? 2 : 1; 
 
   const { user } = useAuth();
   const telefono = user?.telefono?.trim() ?? "";
   const canFollow = !!telefono;
 
   useDeviceTokenSync(telefono);
+
+  // Estado para el visor de imágenes (Lightbox)
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   const businessService: IBusinessService = new BusinessService(new BusinessRepository());
 
@@ -169,18 +174,21 @@ export default function HomeScreen() {
         direccion: b.direccion ?? null,
         descripcion: b.descripcion ?? null,
         puntosAcumulados: null,
-        promocionesCustom: [], // En la lista general no hay promos personales
+        promocionesCustom: [],
       })),
     [items]
   );
 
   // ======= Mis negocios (seguidos) =======
-  const [tab, setTab] = useState<TabKey>("all");
+  // CAMBIO 1: "mine" es el valor por defecto ahora
+  const [tab, setTab] = useState<TabKey>("mine");
   const [myLoading, setMyLoading] = useState(false);
   const [myRefreshing, setMyRefreshing] = useState(false);
   const [myItems, setMyItems] = useState<UiBusiness[]>([]);
   const [followSet, setFollowSet] = useState<Set<number>>(new Set());
   const [pointsByBiz, setPointsByBiz] = useState<Record<number, number>>({});
+  
+  const [activeNav, setActiveNav] = useState('home');
 
   const fetchMyBusinesses = async () => {
     if (!canFollow) return;
@@ -188,7 +196,7 @@ export default function HomeScreen() {
     try {
       const { status, data, message } = await businessService.getNegociosSeguidosByTelefono(telefono);
       if (status < 200 || status >= 300) throw new Error(message || "No se pudieron obtener tus negocios.");
-      // 3. Mapeo correcto incluyendo promocionesCustom
+      
       const ui = (data ?? []).map((b) => ({
         id: b.idNegocio,
         name: b.name,
@@ -200,7 +208,7 @@ export default function HomeScreen() {
         direccion: b.direccion,
         descripcion: b.descripcion,
         puntosAcumulados: b.puntosAcumulados,
-        promocionesCustom: b.promocionesCustom, // <--- Importante
+        promocionesCustom: b.promocionesCustom,
       }));
 
       setMyItems(ui);
@@ -235,6 +243,7 @@ export default function HomeScreen() {
       setMyRefreshing(false);
     }
   };
+
   const refreshAll = async () => {
     await Promise.all([onRefresh(), fetchMyBusinesses()]);
   };
@@ -248,6 +257,7 @@ export default function HomeScreen() {
 
   // ======= Toggle seguir =======
   const [pending, setPending] = useState<Record<number, boolean>>({});
+  
   const toggleFollow = async (businessId: number) => {
     if (!canFollow) {
       Alert.alert("Acción no permitida", "Inicia sesión y agrega tu teléfono para seguir negocios.");
@@ -262,6 +272,8 @@ export default function HomeScreen() {
       willFollow ? next.add(businessId) : next.delete(businessId);
       return next;
     });
+    
+    // Optimistic Update
     if (willFollow) setPointsByBiz((m) => ({ ...m, [businessId]: m[businessId] ?? 0 }));
     else
       setPointsByBiz((m) => {
@@ -272,6 +284,7 @@ export default function HomeScreen() {
     try {
       const resp = await businessService.actualizarSeguirNegocioByTelefono(businessId, telefono, willFollow);
       if (resp.status < 200 || resp.status >= 300) throw new Error(resp.message || "No se pudo actualizar.");
+      
       if (willFollow) {
         const found = uiAll.find((x) => x.id === businessId);
         if (found && !myItems.some((x) => x.id === businessId)) setMyItems((arr) => [{ ...found, puntosAcumulados: 0 }, ...arr]);
@@ -279,16 +292,12 @@ export default function HomeScreen() {
         setMyItems((arr) => arr.filter((x) => x.id !== businessId));
       }
     } catch (e: any) {
+      // Revertir
       setFollowSet((s) => {
         const next = new Set(s);
         willFollow ? next.delete(businessId) : next.add(businessId);
         return next;
       });
-      if (willFollow)
-        setPointsByBiz((m) => {
-          const { [businessId]: _, ...rest } = m;
-          return rest;
-        });
       Alert.alert("Ups", e?.message || "No se pudo actualizar el seguimiento.");
     } finally {
       setPending((p) => ({ ...p, [businessId]: false }));
@@ -300,133 +309,133 @@ export default function HomeScreen() {
     listRef.current?.scrollToOffset({ offset: 0, animated: false });
   }, [tab, localQuery]);
 
-  // 4. Función gotoDetail corregida
-const gotoDetail = (b: UiBusiness) => {
-    // 1. INTELIGENCIA: Buscamos si tenemos una versión "mejor" de este negocio en mis seguidos
-    // Si 'b' viene de la lista general, no tiene puntos. Si lo encontramos en 'myItems', usamos ese.
+  const gotoDetail = (b: UiBusiness) => {
     const richData = myItems.find((item) => item.id === b.id) ?? b;
-
     navigation.navigate("BusinessDetail", {
       business: {
         idNegocio: richData.id,
         name: richData.name,
         category: richData.category ?? null,
-        
-        configuracion: {
-            id: 0, 
-            porcentajeVentas: 0, 
-            activo: true, 
-            urlLogo: richData.logoUrl ?? null, 
-            permitirConfiguracionPersonalizada: false 
-        },
-        
+        configuracion: { id: 0, porcentajeVentas: 0, activo: true, urlLogo: richData.logoUrl ?? null, permitirConfiguracionPersonalizada: false },
         facebook: richData.facebook ?? null,
         instagram: richData.instagram ?? null,
         sitioWeb: richData.sitioWeb ?? null,
         direccion: richData.direccion ?? null,
         descripcion: richData.descripcion ?? null,
-        
-        // 2. Aquí usamos los datos del objeto enriquecido
         puntosAcumulados: richData.puntosAcumulados,
-        promocionesCustom: richData.promocionesCustom, 
+        promocionesCustom: richData.promocionesCustom,
       },
     });
   };
-  const Segmented = () => (
-    <View className="mt-4 rounded-2xl bg-blue-50 border border-blue-100 p-1 flex-row">
-      {[
-        { key: "all" as const, label: "Negocios" },
-        { key: "mine" as const, label: "Mis negocios" },
-      ].map((t) => {
-        const active = tab === t.key;
-        const disabled = t.key === "mine" && !canFollow;
-        return (
-          <Pressable
-            key={t.key}
-            onPress={() =>
-              disabled
-                ? Alert.alert("Solo para cuentas con teléfono", "Inicia sesión y agrega tu teléfono para ver tus negocios seguidos.")
-                : setTab(t.key)
-            }
-            className={`flex-1 py-2 rounded-xl items-center ${active ? "bg-white shadow-sm" : ""} ${disabled ? "opacity-40" : ""}`}
-          >
-            <Text className={`font-semibold ${active ? "text-blue-700" : "text-blue-600/70"}`}>{t.label}</Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
+
+  // --- COMPONENTES VISUALES MEJORADOS ---
 
   const BusinessCard = ({ item }: { item: UiBusiness }) => {
-
     const isFollowing = followSet.has(item.id);
     const isBusy = !!pending[item.id];
     const puntos = isFollowing ? pointsByBiz[item.id] ?? item.puntosAcumulados ?? 0 : undefined;
 
     return (
-      <View className={`${isMultiCol ? "w-[48%]" : "w-full"} rounded-2xl mb-3 overflow-hidden border border-blue-100 bg-white`}>
-        <View className="h-28 bg-blue-50 relative">
+      <View 
+        className={`bg-white rounded-[24px] mb-4 p-4 flex-row gap-4 ${isTablet ? "flex-1 m-2" : ""}`}
+        // Sombra más difusa y elegante
+        style={{ 
+            shadowColor: '#64748B', 
+            shadowOffset: { width: 0, height: 8 }, 
+            shadowOpacity: 0.1, 
+            shadowRadius: 16,
+            elevation: 4,
+            borderLeftWidth: 4,
+            borderLeftColor: '#3B82F6' // SIEMPRE AZUL, no cambia a verde
+        }}
+      >
+        {/* Imagen Izquierda (Clickeable para Zoom) */}
+        <Pressable 
+            onPress={() => item.logoUrl && setSelectedImage(item.logoUrl)}
+            className="w-24 h-24 rounded-2xl overflow-hidden bg-slate-100 relative shrink-0 border border-slate-100"
+            style={{ elevation: 2 }}
+        >
           {item.logoUrl ? (
-            <Image source={{ uri: item.logoUrl }} className="h-full w-full" resizeMode="cover" />
+            <Image source={{ uri: item.logoUrl }} className="w-full h-full" resizeMode="cover" />
           ) : (
-            <View className="flex-1 items-center justify-center">
-              <MaterialCommunityIcons name="storefront-outline" size={36} color="#2563EB" />
+            <View className="flex-1 items-center justify-center bg-slate-50">
+              <MaterialCommunityIcons name="storefront-outline" size={32} color="#94A3B8" />
             </View>
           )}
-
-          {!!item.category && (
-            <View className="absolute left-2 top-2 px-2 py-[3px] rounded-full bg-white/95 border border-blue-100">
-              <Text className="text-[10px] font-semibold text-blue-700" numberOfLines={1}>
-                {item.category}
-              </Text>
-            </View>
-          )}
-
-          <Pressable
-            onPress={() => toggleFollow(item.id)}
-            disabled={isBusy || !canFollow}
-            className={`absolute right-2 top-2 h-8 w-8 items-center justify-center rounded-full bg-white border border-blue-100 shadow-sm ${
-              isBusy || !canFollow ? "opacity-50" : "active:opacity-90"
-            }`}
-          >
-            <MaterialCommunityIcons name={isFollowing ? "heart" : "heart-outline"} size={18} color={isFollowing ? "#EF4444" : "#1F2937"} />
-          </Pressable>
-        </View>
-
-        <View className="px-3 pt-2 pb-3">
-          <Text className="font-bold text-slate-900 text-[13.5px]" numberOfLines={1}>
-            {item.name}
-          </Text>
-
-          {isFollowing ? (
-            <Text className="text-blue-900/80 text-[11px] mt-1 leading-4" numberOfLines={2}>
-              Tus puntos en este negocio
-            </Text>
-          ) : (
-            <Text className="text-slate-500 text-[11px] mt-1 leading-4" numberOfLines={2}>
-              Toca el corazón para seguir
-            </Text>
-          )}
-
-          <View className="flex-row items-center justify-between mt-2">
-            {isFollowing ? (
-              <View className="flex-1 min-w-0 max-w-[66%] px-2 py-1 rounded-lg bg-blue-50 border border-blue-200 flex-row items-center">
-                <MaterialCommunityIcons name="wallet-outline" size={12} color="#1D4ED8" />
-                <Text className="ml-1 text-[11px] font-extrabold text-blue-700" numberOfLines={1}>
-                  {currency(puntos)}
-                </Text>
-              </View>
-            ) : (
-              <View className="h-[26px] flex-1" />
-            )}
-
-            <Pressable onPress={() => gotoDetail(item)} className="h-8 px-3 rounded-lg bg-white border border-blue-600 items-center justify-center ml-2 shrink-0">
-              <Text className="text-blue-700 font-semibold text-[12px]" allowFontScaling={false}>
-                Ver
-              </Text>
-            </Pressable>
+          {/* Icono de lupa pequeño para indicar que se puede ver */}
+          <View className="absolute bottom-1 right-1 bg-black/30 rounded-full p-1">
+             <MaterialCommunityIcons name="magnify-plus-outline" size={12} color="white" />
           </View>
-        </View>
+        </Pressable>
+
+        {/* Contenido Derecha */}
+        <Pressable 
+            className="flex-1 justify-between py-1"
+            onPress={() => gotoDetail(item)} // Click en el cuerpo lleva al detalle
+        >
+          <View>
+             <View className="flex-row justify-between items-start">
+                <View className="flex-1 mr-2">
+                    {!!item.category && (
+                    <View className="self-start px-2.5 py-1 rounded-lg bg-slate-100 mb-1.5">
+                        <Text className="text-[10px] font-bold text-slate-600 uppercase tracking-wide">
+                        {item.category}
+                        </Text>
+                    </View>
+                    )}
+                    <Text className="font-bold text-slate-800 text-[17px] leading-tight" numberOfLines={1}>
+                        {item.name}
+                    </Text>
+                </View>
+
+                {/* Botón Corazón */}
+                <TouchableOpacity 
+                    onPress={(e) => {
+                        e.stopPropagation(); // Evitar que dispare la navegación
+                        toggleFollow(item.id);
+                    }}
+                    disabled={isBusy || !canFollow}
+                    hitSlop={12}
+                    className="bg-slate-50 p-1.5 rounded-full"
+                >
+                    <MaterialCommunityIcons 
+                        name={isFollowing ? "heart" : "heart-outline"} 
+                        size={20} 
+                        color={isFollowing ? "#EF4444" : "#94A3B8"} 
+                    />
+                </TouchableOpacity>
+             </View>
+             
+             <Text className="text-slate-400 text-xs mt-1.5 leading-5 font-medium" numberOfLines={2}>
+               {item.descripcion || (isFollowing ? "¡Tienes puntos acumulados aquí! Toca para ver detalles." : "Visita este negocio y descubre sus promociones.")}
+             </Text>
+          </View>
+
+          {/* Footer de la tarjeta */}
+          <View className="flex-row items-center justify-between mt-3">
+             {isFollowing ? (
+                 // CAMBIO AQUÍ: Ahora usa estilos azules en lugar de verdes
+                 <View className="flex-row items-center bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100">
+                    <MaterialCommunityIcons name="wallet" size={14} color="#2563EB" />
+                    <Text className="ml-1.5 text-xs font-bold text-blue-700">
+                      {currency(puntos)}
+                    </Text>
+                 </View>
+             ) : (
+                <View className="flex-row items-center">
+                    <MaterialCommunityIcons name="star" size={14} color="#F59E0B" />
+                    <Text className="text-xs text-slate-500 ml-1 font-semibold">4.8</Text>
+                </View>
+             )}
+
+            <TouchableOpacity 
+                onPress={() => gotoDetail(item)}
+                className="bg-blue-600 rounded-xl px-4 py-1.5 shadow-sm shadow-blue-200"
+            >
+                <Text className="text-white text-xs font-bold">Ver</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
       </View>
     );
   };
@@ -434,93 +443,148 @@ const gotoDetail = (b: UiBusiness) => {
   const isMine = tab === "mine";
   const data = isMine ? myItems : uiAll;
 
+  // --- RENDER PRINCIPAL ---
   return (
-    <View className="flex-1 bg-blue-600">
-      <StatusBar barStyle="light-content" />
-      <View pointerEvents="none" className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-blue-400/25" />
-      <View pointerEvents="none" className="absolute -bottom-28 -left-28 h-80 w-80 rounded-full bg-blue-800/25" />
-
-      <Safe className="flex-1 px-4 pb-2" edges={["top", "left", "right"]}>
-        <View className="flex-1 bg-white rounded-3xl p-6 border border-blue-100 shadow-2xl mt-16">
-          <Text className="text-3xl font-black text-blue-700 text-center tracking-tight">Negocios</Text>
-          <Text className="text-slate-500 text-center mt-1">Descubre negocios y promociones cerca de ti</Text>
-
-          {/* Search pill */}
-          <View
-            style={{
-              marginTop: 14,
-              flexDirection: "row",
-              alignItems: "center",
-              backgroundColor: "#FFFFFF",
-              borderRadius: 999,
-              borderWidth: 1,
-              borderColor: "#E5E7EB",
-              paddingHorizontal: 12,
-              height: 48,
-            }}
-          >
-            <MaterialCommunityIcons name="magnify" size={22} color="#64748B" />
-            <TextInput
-              value={localQuery}
-              onChangeText={setLocalQuery}
-              placeholder="Buscar negocios"
-              placeholderTextColor="#94A3B8"
-              style={{
-                flex: 1,
-                marginLeft: 8,
-                color: "#0F172A",
-                paddingVertical: 0,
-                ...(Platform.OS === "android" ? { textAlignVertical: "center" as const } : null),
-              }}
-              returnKeyType="search"
-            />
-            {!!localQuery && (
-              <Pressable onPress={() => setLocalQuery("")} hitSlop={8}>
-                <MaterialCommunityIcons name="close-circle-outline" size={18} color="#94A3B8" />
-              </Pressable>
+    <View className="flex-1 bg-slate-100"> 
+      <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
+      
+      {/* Lightbox Modal (Visor de Imágenes) */}
+      <Modal 
+        visible={!!selectedImage} 
+        transparent={true} 
+        animationType="fade"
+        onRequestClose={() => setSelectedImage(null)}
+      >
+        <View className="flex-1 bg-black/95 justify-center items-center relative">
+            <TouchableOpacity 
+                onPress={() => setSelectedImage(null)}
+                className="absolute top-12 right-6 z-50 bg-white/20 p-2 rounded-full"
+            >
+                <MaterialCommunityIcons name="close" size={28} color="white" />
+            </TouchableOpacity>
+            
+            {selectedImage && (
+                <Image 
+                    source={{ uri: selectedImage }} 
+                    className="w-full h-full" 
+                    resizeMode="contain" 
+                />
             )}
-          </View>
-
-          <Segmented />
-
-          <View className="flex-1 mt-3">
-            {(isMine ? myLoading || initialLoading : initialLoading) ? (
-              <View className="flex-1 items-center justify-center">
-                <ActivityIndicator color="#1D4ED8" />
-                <Text className="text-blue-800/70 mt-2">Cargando…</Text>
-              </View>
-            ) : (
-              <FlatList
-                ref={listRef}
-                data={data}
-                keyExtractor={(it) => String(it.id)}
-                numColumns={columns}
-                renderItem={({ item }) => <BusinessCard item={item} />}
-                contentContainerStyle={{ paddingBottom: 8 + insets.bottom }}
-                columnWrapperStyle={isMultiCol ? { justifyContent: "space-between" } : undefined}
-                showsVerticalScrollIndicator={false}
-                onEndReached={isMine ? undefined : hasNext ? onEndReached : undefined}
-                onEndReachedThreshold={0.35}
-                keyboardShouldPersistTaps="handled"
-                refreshControl={
-                  <RefreshControl
-                    refreshing={isMine ? myRefreshing : refreshing}
-                    onRefresh={isMine ? refreshMine : refreshAll}
-                    tintColor="#1D4ED8"
-                  />
-                }
-                ListEmptyComponent={
-                  <View className="items-center mt-16">
-                    <MaterialCommunityIcons name="text-search" size={36} color="#93C5FD" />
-                    <Text className="text-blue-800/70 mt-2">{isMine ? "Aún no sigues ningún negocio" : "Sin resultados"}</Text>
-                  </View>
-                }
-                ListFooterComponent={!isMine && loading && hasNext ? <View className="py-4"><ActivityIndicator color="#2563EB" /></View> : null}
-              />
-            )}
-          </View>
+            
+            <Text className="absolute bottom-10 text-white/70 text-sm">Toca para cerrar</Text>
+            
+            {/* Overlay invisible para cerrar al tocar fuera (opcional) */}
+            <Pressable className="absolute inset-0 -z-10" onPress={() => setSelectedImage(null)} />
         </View>
-      </Safe>
+      </Modal>
+
+      {/* Header Fijo Superior */}
+      <View className="bg-blue-600 pb-8 pt-2 rounded-b-[40px] shadow-xl shadow-blue-900/20 z-10 relative overflow-hidden">
+         {/* Decoración de fondo */}
+         <View className="absolute -top-20 -right-20 w-64 h-64 bg-white/10 rounded-full blur-3xl" />
+         <View className="absolute top-10 -left-10 w-40 h-40 bg-indigo-500/30 rounded-full blur-2xl" />
+
+         <Safe edges={["top"]} className="px-6">
+            <View className="items-center mb-8 mt-4">
+                <Text className="text-3xl font-extrabold text-white tracking-tight">Negocios</Text>
+                <Text className="text-blue-100 font-medium text-sm mt-1">Descubre promociones cerca de ti</Text>
+            </View>
+         </Safe>
+      </View>
+
+      {/* Contenedor Principal */}
+      <View className="flex-1 -mt-6">
+        <View className="px-6 z-20 mb-2">
+            {/* Input Flotante */}
+            <View 
+                className="bg-white rounded-2xl flex-row items-center px-4 h-14 shadow-lg shadow-slate-200"
+                style={{ elevation: 8 }}
+            >
+                <MaterialCommunityIcons name="magnify" size={22} color="#94A3B8" />
+                <TextInput 
+                    className="flex-1 ml-3 text-slate-700 text-[15px] h-full"
+                    placeholder="Buscar negocios..."
+                    placeholderTextColor="#94A3B8"
+                    value={localQuery}
+                    onChangeText={setLocalQuery}
+                />
+                {!!localQuery && (
+                    <TouchableOpacity onPress={() => setLocalQuery("")}>
+                        <MaterialCommunityIcons name="close-circle" size={20} color="#CBD5E1" />
+                    </TouchableOpacity>
+                )}
+            </View>
+        </View>
+
+        {/* Lista de Contenido */}
+        <FlatList
+            ref={listRef}
+            data={data}
+            keyExtractor={(it) => String(it.id)}
+            numColumns={columns}
+            key={columns} 
+            contentContainerStyle={{ 
+                paddingHorizontal: 20, 
+                paddingTop: 16, 
+                paddingBottom: 30 
+            }}
+            showsVerticalScrollIndicator={false}
+            
+            // Header interno de la lista (Tabs)
+            ListHeaderComponent={
+                <View className="mb-6 mt-2 px-2">
+                    {/* Tabs Segmentados */}
+                    <View className="flex-row bg-slate-200/80 p-1.5 rounded-full w-full max-w-xs self-center border border-white/50">
+                        {/* CAMBIO 2: Invertí el orden, primero Mis Negocios */}
+                        <Pressable 
+                            onPress={() => !canFollow ? Alert.alert("Inicia sesión", "Necesitas registrar tu teléfono.") : setTab("mine")}
+                            className={`flex-1 py-2.5 items-center rounded-full transition-all ${tab === "mine" ? "bg-white shadow-sm" : ""}`}
+                        >
+                            <Text className={`text-sm font-bold ${tab === "mine" ? "text-indigo-600" : "text-slate-500"}`}>Mis negocios</Text>
+                        </Pressable>
+                        <Pressable 
+                            onPress={() => setTab("all")}
+                            className={`flex-1 py-2.5 items-center rounded-full transition-all ${tab === "all" ? "bg-white shadow-sm" : ""}`}
+                        >
+                            <Text className={`text-sm font-bold ${tab === "all" ? "text-indigo-600" : "text-slate-500"}`}>Negocios</Text>
+                        </Pressable>
+                    </View>
+                </View>
+            }
+
+            renderItem={({ item }) => <BusinessCard item={item} />}
+            
+            // Estados de Carga y Vacío
+            ListEmptyComponent={
+                <View className="items-center justify-center py-20 opacity-60">
+                     <View className="bg-slate-200 p-6 rounded-full mb-4">
+                        <MaterialCommunityIcons name="store-search-outline" size={48} color="#94A3B8" />
+                     </View>
+                     <Text className="text-slate-400 mt-2 text-center font-bold text-lg">
+                        {isMine ? "Sin negocios seguidos" : "No encontramos resultados"}
+                     </Text>
+                     <Text className="text-slate-400 text-center text-sm px-10">
+                        {isMine ? "Dale corazón a los negocios que te gusten para verlos aquí." : "Intenta buscar con otro nombre."}
+                     </Text>
+                </View>
+            }
+            refreshControl={
+                <RefreshControl
+                  refreshing={isMine ? myRefreshing : refreshing}
+                  onRefresh={isMine ? refreshMine : refreshAll}
+                  tintColor="#2563EB"
+                  colors={["#2563EB"]}
+                />
+            }
+        />
+
+        {/* Loading Overlay */}
+        {(isMine ? myLoading : initialLoading) && !refreshing && !myRefreshing && (
+            <View className="absolute inset-0 bg-white/80 items-center justify-center z-30 pt-20">
+                <ActivityIndicator size="large" color="#2563EB" />
+            </View>
+        )}
+      </View>
     </View>
   );
 }

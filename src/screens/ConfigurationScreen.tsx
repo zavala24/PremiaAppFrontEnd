@@ -1,4 +1,3 @@
-// src/screens/ConfigurationScreen.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
   View as RNView,
@@ -15,6 +14,7 @@ import { styled } from "nativewind";
 import Toast from "react-native-toast-message";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "../presentation/context/AuthContext";
 import { UserRepository } from "../infrastructure/repositories/UserRepository";
@@ -27,6 +27,7 @@ const TextInput = styled(RNTextInput);
 const Pressable = styled(RNPressable);
 const KeyboardAvoidingView = styled(RNKeyboardAvoidingView);
 const ScrollView = styled(RNScrollView);
+const Safe = styled(SafeAreaView);
 
 const userService: IUserService = new UserService(new UserRepository());
 
@@ -38,10 +39,8 @@ export default function ConfigurationScreen() {
   const [apellidoPaterno, setApellidoPaterno] = useState("");
   const [apellidoMaterno, setApellidoMaterno] = useState("");
   const [email, setEmail] = useState("");
-  const [notif, setNotif] = useState(true); // visual por ahora
-
-  const [touchedEmail, setTouchedEmail] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [touchedEmail, setTouchedEmail] = useState(false);
 
   // Teléfono actual (no editable aquí; se usa para el update)
   const [telefonoActual, setTelefonoActual] = useState<string | null>(null);
@@ -60,7 +59,7 @@ export default function ConfigurationScreen() {
       // 1) del contexto si existe
       let phone = (user as any)?.telefono as string | undefined;
 
-      // 2) fallback: guardado por LoginScreen (haz AsyncStorage.setItem("lastPhone", phone) en el login)
+      // 2) fallback: guardado por LoginScreen
       if (!phone) {
         phone = (await AsyncStorage.getItem("lastPhone")) ?? undefined;
       }
@@ -77,17 +76,6 @@ export default function ConfigurationScreen() {
       }
 
       const { resp, user: u } = await userService.getUserByPhone(phone);
-
-      if (!resp.success || !u) {
-        setLoading(false);
-        Toast.show({
-          type: "error",
-          text1: resp.message || "No se encontró el usuario",
-          position: "top",
-          visibilityTime: 2000,
-        });
-        return;
-      }
 
       setNombre(u.nombre ?? "");
       setApellidoPaterno(u.apellidoPaterno ?? "");
@@ -131,7 +119,7 @@ export default function ConfigurationScreen() {
         apellidoPaterno: apellidoPaterno.trim(),
         apellidoMaterno: apellidoMaterno.trim(),
         email: email.trim(),
-        role: "User", // si tu entidad lo requiere
+        role: "User", 
       });
 
       setLoading(false);
@@ -164,140 +152,151 @@ export default function ConfigurationScreen() {
 
   return (
     <View className="flex-1 bg-blue-600">
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
 
-      {/* Fondo decorativo */}
-      <View
-        pointerEvents="none"
-        className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-blue-400/25"
-      />
-      <View
-        pointerEvents="none"
-        className="absolute bottom-10 left-6 h-28 w-28 rounded-3xl bg-white/10 rotate-6"
-      />
+      {/* Fondo decorativo (Burbujas) */}
+      <View pointerEvents="none" className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-blue-400/25" />
+      <View pointerEvents="none" className="absolute -bottom-28 -left-28 h-80 w-80 rounded-full bg-blue-800/25" />
 
-      <KeyboardAvoidingView
-        behavior={Platform.select({ ios: "padding", android: undefined })}
-        className="flex-1"
-        keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
-      >
-        <ScrollView
-          className="px-6"
-          contentContainerStyle={{ flexGrow: 1 }}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View className="flex-1 items-center justify-center py-6">
-            <View
-              className="w-full rounded-3xl bg-white shadow-2xl p-6 mt-16"
-              style={{ maxWidth: 460 }}
-            >
-              <Text className="text-2xl font-extrabold text-blue-700 mb-1 text-center">
-                Configuración
-              </Text>
-              <Text className="text-gray-500 text-center mb-5">
-                Administra tu información de perfil
-              </Text>
-              <View className="h-[1px] bg-gray-100 mb-5" />
-
-              {/* Nombre */}
-              <Text className="text-gray-700 mb-1 font-semibold">Nombre</Text>
-              <View className="flex-row items-center rounded-2xl border border-gray-200 bg-[#F9FAFB] px-4 py-3 mb-3">
-                <Text className="text-gray-500 mr-2">👤</Text>
-                <TextInput
-                  value={nombre}
-                  onChangeText={setNombre}
-                  placeholder="Tu nombre"
-                  placeholderTextColor="#9CA3AF"
-                  className="flex-1 text-[16px] text-gray-800"
-                />
-              </View>
-
-              {/* Apellido paterno */}
-              <Text className="text-gray-700 mb-1 font-semibold">
-                Apellido paterno
-              </Text>
-              <View className="flex-row items-center rounded-2xl border border-gray-200 bg-[#F9FAFB] px-4 py-3 mb-3">
-                <Text className="text-gray-500 mr-2">🧾</Text>
-                <TextInput
-                  value={apellidoPaterno}
-                  onChangeText={setApellidoPaterno}
-                  placeholder="Tu apellido paterno"
-                  placeholderTextColor="#9CA3AF"
-                  className="flex-1 text-[16px] text-gray-800"
-                />
-              </View>
-
-              {/* Apellido materno */}
-              <Text className="text-gray-700 mb-1 font-semibold">
-                Apellido materno
-              </Text>
-              <View className="flex-row items-center rounded-2xl border border-gray-200 bg-[#F9FAFB] px-4 py-3 mb-3">
-                <Text className="text-gray-500 mr-2">🧾</Text>
-                <TextInput
-                  value={apellidoMaterno}
-                  onChangeText={setApellidoMaterno}
-                  placeholder="Tu apellido materno"
-                  placeholderTextColor="#9CA3AF"
-                  className="flex-1 text-[16px] text-gray-800"
-                />
-              </View>
-
-              {/* Correo */}
-              <Text className="text-gray-700 mb-1 font-semibold">Correo</Text>
-              <View
-                className={`flex-row items-center rounded-2xl border px-4 py-3 bg-[#F9FAFB] ${
-                  touchedEmail
-                    ? emailValid
-                      ? "border-green-500"
-                      : "border-red-500"
-                    : "border-gray-200"
-                }`}
-              >
-                <Text className="text-gray-500 mr-2">✉️</Text>
-                <TextInput
-                  value={email}
-                  onChangeText={(t) => {
-                    setEmail(t);
-                    setTouchedEmail(true);
-                  }}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  placeholder="ejemplo@correo.com"
-                  placeholderTextColor="#9CA3AF"
-                  className="flex-1 text-[16px] text-gray-800"
-                />
-              </View>
-              {touchedEmail && !emailValid && (
-                <Text className="text-red-500 text-[11px] mt-1 mb-1">
-                  Correo inválido.
-                </Text>
-              )}
-
-              {/* Guardar */}
-              <Pressable
-                onPress={handleSave}
-                disabled={!canSave}
-                className={`rounded-2xl py-3.5 items-center mt-6 shadow-lg shadow-blue-500/30 ${
-                  canSave ? "bg-blue-700 active:opacity-90" : "bg-blue-400"
-                }`}
-              >
-                {loading ? (
-                  <View className="flex-row items-center">
-                    <ActivityIndicator size="small" color="#fff" />
-                    <Text className="text-white font-semibold text-base ml-3">
-                      Guardando…
-                    </Text>
-                  </View>
-                ) : (
-                  <Text className="text-white font-semibold text-base">
-                    Guardar cambios
-                  </Text>
-                )}
-              </Pressable>
+      <Safe className="flex-1" edges={['top', 'left', 'right']}>
+        
+        {/* HEADER "PREMIUM" */}
+        <View className="h-28 justify-center items-center mt-4 px-4 z-10 mb-6">
+            <View className="w-12 h-12 bg-white/20 rounded-2xl items-center justify-center mb-3">
+                <MaterialCommunityIcons name="cog-outline" size={24} color="white" />
             </View>
+            <Text className="text-white text-2xl font-extrabold tracking-wide text-center">
+                Configuración
+            </Text>
+            <Text className="text-blue-100 text-sm mt-1 text-center font-medium">
+                Administra tu información de perfil
+            </Text>
+        </View>
+
+        {/* CONTENEDOR PRINCIPAL */}
+        <KeyboardAvoidingView
+          behavior={Platform.select({ ios: "padding", android: "height" })}
+          style={{ flex: 1 }}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
+        >
+          {/* Tarjeta Blanca "Sheet" */}
+          <View className="flex-1 bg-slate-50 rounded-t-[32px] pt-8 px-6 shadow-2xl overflow-hidden border-t border-white/20">
+            <ScrollView
+              className="flex-1"
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 40 }}
+            >
+                {/* Formulario */}
+                <View className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-5">
+                    
+                    {/* Nombre */}
+                    <View>
+                        <Text className="text-slate-500 font-bold text-xs uppercase mb-2 ml-1">Nombre</Text>
+                        <View className="flex-row items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5">
+                            <MaterialCommunityIcons name="account-outline" size={20} color="#94A3B8" style={{ marginRight: 10 }} />
+                            <TextInput
+                                value={nombre}
+                                onChangeText={setNombre}
+                                placeholder="Tu nombre"
+                                placeholderTextColor="#9CA3AF"
+                                className="flex-1 text-base font-semibold text-slate-800"
+                            />
+                        </View>
+                    </View>
+
+                    {/* Apellido Paterno */}
+                    <View>
+                        <Text className="text-slate-500 font-bold text-xs uppercase mb-2 ml-1">Apellido Paterno</Text>
+                        <View className="flex-row items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5">
+                            <MaterialCommunityIcons name="card-account-details-outline" size={20} color="#94A3B8" style={{ marginRight: 10 }} />
+                            <TextInput
+                                value={apellidoPaterno}
+                                onChangeText={setApellidoPaterno}
+                                placeholder="Tu apellido paterno"
+                                placeholderTextColor="#9CA3AF"
+                                className="flex-1 text-base font-semibold text-slate-800"
+                            />
+                        </View>
+                    </View>
+
+                    {/* Apellido Materno */}
+                    <View>
+                        <Text className="text-slate-500 font-bold text-xs uppercase mb-2 ml-1">Apellido Materno</Text>
+                        <View className="flex-row items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5">
+                            <MaterialCommunityIcons name="card-account-details-outline" size={20} color="#94A3B8" style={{ marginRight: 10 }} />
+                            <TextInput
+                                value={apellidoMaterno}
+                                onChangeText={setApellidoMaterno}
+                                placeholder="Tu apellido materno"
+                                placeholderTextColor="#9CA3AF"
+                                className="flex-1 text-base font-semibold text-slate-800"
+                            />
+                        </View>
+                    </View>
+
+                    {/* Correo */}
+                    <View>
+                        <Text className="text-slate-500 font-bold text-xs uppercase mb-2 ml-1">Correo Electrónico</Text>
+                        <View className={`flex-row items-center rounded-2xl border px-4 py-3.5 bg-slate-50 ${touchedEmail ? (emailValid ? "border-green-500 bg-green-50/30" : "border-red-400 bg-red-50/30") : "border-slate-200"}`}>
+                            <MaterialCommunityIcons name="email-outline" size={20} color={touchedEmail && !emailValid ? "#EF4444" : "#94A3B8"} style={{ marginRight: 10 }} />
+                            <TextInput
+                                value={email}
+                                onChangeText={(t) => {
+                                    setEmail(t);
+                                    setTouchedEmail(true);
+                                }}
+                                autoCapitalize="none"
+                                keyboardType="email-address"
+                                placeholder="ejemplo@correo.com"
+                                placeholderTextColor="#9CA3AF"
+                                className="flex-1 text-base font-semibold text-slate-800"
+                            />
+                            {touchedEmail && emailValid && (
+                                <MaterialCommunityIcons name="check-circle" size={18} color="#15803d" />
+                            )}
+                        </View>
+                        {touchedEmail && !emailValid && (
+                            <Text className="text-red-500 text-xs mt-1 ml-1 font-medium">
+                                Por favor ingresa un correo válido.
+                            </Text>
+                        )}
+                    </View>
+
+                    {/* Botón Guardar */}
+                    <Pressable
+                        onPress={handleSave}
+                        disabled={!canSave}
+                        className={`rounded-2xl py-4 items-center shadow-lg mt-4 transition-all ${
+                            canSave 
+                                ? "bg-blue-600 shadow-blue-300 active:scale-[0.98] active:bg-blue-700" 
+                                : "bg-slate-200 shadow-none"
+                        }`}
+                    >
+                        {loading ? (
+                            <View className="flex-row items-center">
+                                <ActivityIndicator size="small" color={!canSave ? "#94A3B8" : "#fff"} />
+                                <Text className={`font-bold text-base ml-2 ${!canSave ? "text-slate-400" : "text-white"}`}>
+                                    Guardando...
+                                </Text>
+                            </View>
+                        ) : (
+                            <Text className={`font-bold text-lg ${!canSave ? "text-slate-400" : "text-white"}`}>
+                                Guardar Cambios
+                            </Text>
+                        )}
+                    </Pressable>
+
+                </View>
+                
+                {/* Nota de versión o info adicional */}
+                <Text className="text-center text-slate-300 text-xs mt-8">
+                </Text>
+
+            </ScrollView>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </Safe>
     </View>
   );
 }

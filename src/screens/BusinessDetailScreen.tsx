@@ -77,10 +77,9 @@ export default function BusinessDetailScreen() {
 
       <Safe
         className="flex-1 px-4 pb-2"
-        edges={["top", "left", "right"]}
         style={{ paddingTop: insets.top + (Platform.OS === "android" ? 2 : 0) }}
       >
-        <View className="flex-1 bg-white rounded-3xl p-6 border border-blue-100 shadow-2xl">
+        <View className="flex-1 bg-white rounded-3xl p-6 border border-blue-100 shadow-2xl mt-14">
           
           {/* Header con botón volver */}
           <View className="relative mb-3 h-10 justify-center" collapsable={false}>
