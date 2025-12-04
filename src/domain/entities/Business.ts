@@ -17,4 +17,14 @@ export interface Business {
   descripcion?: string | null;
   puntosAcumulados?: number | null;
   configuracion?: BusinessConfig | null;
+  promocionesCustom?: ProductoProgreso[];
+}
+
+export interface ProductoProgreso {
+  idProductoCustom: number;
+  nombreProducto: string;
+  acumulado: number;
+  meta: number;
+  porcentaje: number;
+  estado: string;
 }

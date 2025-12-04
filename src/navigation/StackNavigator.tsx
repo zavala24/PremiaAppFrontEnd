@@ -12,23 +12,18 @@ import LogoutScreen from "../screens/LogoutScreen";
 import ConfigurationScreen from "../screens/ConfigurationScreen";
 import { useAuth } from "../presentation/context/AuthContext";
 
+// 1. IMPORTA TU INTERFAZ ACTUALIZADA (Ajusta la ruta si es necesario)
+import { Business } from "../domain/entities/Business"; 
+
 export type RootStackParamList = {
   Login: { fromRegister?: boolean; registeredPhone?: string } | undefined;
   Register: undefined;
   Tabs: NavigatorScreenParams<TabParamList> | undefined;
-  BusinessDetail: {
-    business: {
-      id: number;
-      name: string;
-      category?: string | null;
-      logoUrl?: string | null;
-      facebook?: string | null;
-      instagram?: string | null;
-      sitioWeb?: string | null;
-      direccion?: string | null;
-      descripcion?: string | null;
-    };
-  };
+  
+  // 2. USA LA INTERFAZ AQUÍ
+  // Esto le dice a TypeScript: "Espera el objeto Business completo con todo y promociones"
+  BusinessDetail: { business: Business }; 
+  
   CreateUser: undefined;
   Logout: undefined;
   Configuration: undefined;

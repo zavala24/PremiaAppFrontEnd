@@ -1,4 +1,3 @@
-// src/screens/CreateUserScreen.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
   View as RNView,
@@ -9,9 +8,11 @@ import {
   StatusBar,
   KeyboardAvoidingView as RNKeyboardAvoidingView,
   Platform,
+  ScrollView as RNScrollView, // 1. Renombramos el import original
 } from "react-native";
 import { styled } from "nativewind";
 import Toast from "react-native-toast-message";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAuth } from "../presentation/context/AuthContext";
 
@@ -23,12 +24,15 @@ import { Business } from "../domain/entities/Business";
 import { BusinessRepository } from "../infrastructure/repositories/BusinessRepository";
 import { BusinessService } from "../application/services/BusinessService";
 import { IBusinessService } from "../application/interfaces/IBusinessService";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 const View = styled(RNView);
 const Text = styled(RNText);
 const TextInput = styled(RNTextInput);
 const Pressable = styled(RNPressable);
 const KeyboardAvoidingView = styled(RNKeyboardAvoidingView);
+const Safe = styled(SafeAreaView);
+const ScrollView = styled(RNScrollView); // 2. Creamos el componente estilizado
 
 export default function CreateUserScreen() {
   const { user } = useAuth();
@@ -154,122 +158,156 @@ export default function CreateUserScreen() {
 
   return (
     <View className="flex-1 bg-blue-600">
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
 
-      {/* Fondo decorativo sutil */}
-      <View className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-blue-400/25" />
-      <View className="absolute -bottom-28 -left-28 h-80 w-80 rounded-full bg-blue-800/25" />
-      <View className="absolute top-32 left-8 h-16 w-16 rounded-2xl bg-white/10 rotate-12" />
-      <View className="absolute bottom-44 right-8 h-20 w-20 rounded-3xl bg-white/10 -rotate-6" />
+      {/* Fondo decorativo sutil (Burbujas) */}
+      <View pointerEvents="none" className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-blue-400/25" />
+      <View pointerEvents="none" className="absolute -bottom-28 -left-28 h-80 w-80 rounded-full bg-blue-800/25" />
 
-      <KeyboardAvoidingView
-        behavior={Platform.select({ ios: "padding", android: undefined })}
-        className="flex-1 justify-center px-6"
-        keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
-      >
-        {/* Tarjeta */}
-        <View className="w-full rounded-3xl bg-white shadow-2xl p-7">
-          {/* Encabezado */}
-          <View className="items-center mb-4">
-            <Text className="text-3xl font-extrabold text-blue-700">Crear usuario</Text>
-            <Text className="text-gray-500 mt-1 text-center">
-              Registra un número para registrar
-            </Text>
-          </View>
-
-          {/* Campo teléfono */}
-          <View className="mb-4">
-            <View
-              className={[
-                "flex-row items-center rounded-2xl border px-4 py-3 shadow-sm bg-[#F9FAFB]",
-                touched
-                  ? isValid
-                    ? "border-green-500"
-                    : "border-red-500"
-                  : "border-gray-200",
-              ].join(" ")}
-            >
-              <Text className="text-gray-500 mr-2">📞</Text>
-
-              <TextInput
-                value={digits}
-                onChangeText={handleChange}
-                maxLength={10}
-                keyboardType="number-pad"
-                inputMode="numeric"
-                textContentType="telephoneNumber"
-                autoComplete="tel"
-                autoCorrect={false}
-                placeholder="Teléfono"
-                placeholderTextColor="#9CA3AF"
-                className="flex-1 text-base text-gray-800 mr-2"
-                // Centrado vertical del placeholder/valor en iOS y Android
-                style={{
-                  paddingVertical: 0,
-                  ...(Platform.OS === "android"
-                    ? { textAlignVertical: "center" as const }
-                    : null),
-                }}
-                returnKeyType="done"
-              />
-
-              <Text
-                className={[
-                  "ml-2 text-xs font-semibold",
-                  isValid ? "text-green-600" : "text-gray-400",
-                ].join(" ")}
-              >
-                {digits.length}/10
-              </Text>
+      <Safe className="flex-1" edges={['top', 'left', 'right']}>
+        
+        {/* HEADER "PREMIUM" */}
+        {/* Se agregó mb-6 para separar el texto del card blanco */}
+        <View className="h-28 justify-center items-center mt-4 px-4 z-10 mb-6">
+            <View className="w-12 h-12 bg-white/20 rounded-2xl items-center justify-center mb-3">
+                <MaterialCommunityIcons name="account-plus" size={24} color="white" />
             </View>
-
-            {/* Ayuda / error */}
-            <Text
-              className={[
-                "mt-2 text-xs",
-                !touched
-                  ? "text-gray-400"
-                  : isValid
-                  ? "text-green-600"
-                  : "text-red-500",
-              ].join(" ")}
-            >
-              {!touched
-                ? "Solo números (10 dígitos)."
-                : isValid
-                ? "Formato válido."
-                : remaining > 0
-                ? `Faltan ${remaining} dígito${remaining === 1 ? "" : "s"}.`
-                : "Formato incorrecto: deben ser 10 dígitos."}
+            <Text className="text-white text-2xl font-extrabold tracking-wide text-center">
+                Crear Usuario
             </Text>
-
-            {serverError ? (
-              <Text className="text-red-500 text-xs mt-1">{serverError}</Text>
-            ) : null}
-          </View>
-
-          {/* Botón */}
-          <Pressable
-            onPress={handleCrearUsuario}
-            disabled={disabledBtn}
-            className={[
-              "rounded-2xl py-4 items-center mt-2 shadow-lg shadow-blue-500/30",
-              disabledBtn ? "bg-blue-400" : "bg-blue-700 active:opacity-90",
-            ].join(" ")}
-          >
-            {loading ? (
-              <View className="flex-row items-center">
-                <ActivityIndicator size="small" color="#fff" />
-                <Text className="text-white font-semibold text-base ml-3">
-                  Creando…
-                </Text>
-              </View>
-            ) : (
-              <Text className="text-white font-semibold text-lg">Crear</Text>
-            )}
-          </Pressable>
+            <Text className="text-blue-100 text-sm mt-1 text-center font-medium">
+                Registra un nuevo cliente para tu negocio
+            </Text>
         </View>
-      </KeyboardAvoidingView>
+
+        {/* CONTENEDOR PRINCIPAL */}
+        <KeyboardAvoidingView
+          behavior={Platform.select({ ios: "padding", android: "height" })}
+          style={{ flex: 1 }}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 10 : 0}
+        >
+          {/* Tarjeta Blanca "Sheet" */}
+          <View className="flex-1 bg-slate-50 rounded-t-[32px] pt-8 px-6 shadow-2xl overflow-hidden border-t border-white/20">
+            <ScrollView 
+                className="flex-1"
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 40 }}
+            >
+                {/* Formulario */}
+                <View className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+                    
+                    {/* Campo Teléfono */}
+                    <View className="mb-6">
+                        <Text className="text-slate-500 font-bold text-xs uppercase mb-2 ml-1">
+                            Número de Teléfono
+                        </Text>
+                        
+                        <View
+                            className={[
+                                "flex-row items-center rounded-2xl border px-4 py-3.5 bg-slate-50",
+                                touched
+                                    ? isValid
+                                        ? "border-green-500 bg-green-50/30"
+                                        : "border-red-400 bg-red-50/30"
+                                    : "border-slate-200",
+                            ].join(" ")}
+                        >
+                            <Text className="text-slate-400 mr-3 text-lg">🇲🇽 +52</Text>
+
+                            <TextInput
+                                value={digits}
+                                onChangeText={handleChange}
+                                maxLength={10}
+                                keyboardType="number-pad"
+                                inputMode="numeric"
+                                placeholder="000 000 0000"
+                                placeholderTextColor="#94A3B8"
+                                className="flex-1 text-lg font-semibold text-slate-800"
+                                style={{
+                                    paddingVertical: 0,
+                                    ...(Platform.OS === "android" ? { textAlignVertical: "center" as const } : null),
+                                }}
+                                returnKeyType="done"
+                            />
+
+                            {isValid && (
+                                <View className="bg-green-100 rounded-full p-1 ml-2">
+                                    <MaterialCommunityIcons name="check" size={14} color="#15803d" />
+                                </View>
+                            )}
+                        </View>
+
+                        {/* Mensajes de ayuda / error */}
+                        <View className="flex-row justify-between items-start mt-2 px-1">
+                            <Text
+                                className={[
+                                    "text-xs font-medium flex-1 mr-2",
+                                    !touched
+                                        ? "text-slate-400"
+                                        : isValid
+                                        ? "text-green-600"
+                                        : "text-red-500",
+                                ].join(" ")}
+                            >
+                                {!touched
+                                    ? "Ingresa los 10 dígitos del cliente."
+                                    : isValid
+                                    ? "Número válido."
+                                    : remaining > 0
+                                    ? `Faltan ${remaining} dígito${remaining === 1 ? "" : "s"}.`
+                                    : "Verifica que sean 10 dígitos."}
+                            </Text>
+                            
+                            <Text className="text-xs text-slate-400 font-medium">
+                                {digits.length}/10
+                            </Text>
+                        </View>
+
+                        {serverError ? (
+                            <View className="mt-3 bg-red-50 p-3 rounded-xl flex-row items-center border border-red-100">
+                                <MaterialCommunityIcons name="alert-circle-outline" size={18} color="#EF4444" />
+                                <Text className="text-red-600 text-xs ml-2 flex-1 font-medium">{serverError}</Text>
+                            </View>
+                        ) : null}
+                    </View>
+
+                    {/* Botón Crear */}
+                    <Pressable
+                        onPress={handleCrearUsuario}
+                        disabled={disabledBtn}
+                        className={[
+                            "rounded-2xl py-4 items-center shadow-lg transition-all",
+                            disabledBtn 
+                                ? "bg-slate-200 shadow-none" 
+                                : "bg-blue-600 shadow-blue-300 active:scale-[0.98] active:bg-blue-700",
+                        ].join(" ")}
+                    >
+                        {loading ? (
+                            <View className="flex-row items-center">
+                                <ActivityIndicator size="small" color={disabledBtn ? "#94A3B8" : "#fff"} />
+                                <Text className={`font-bold text-base ml-2 ${disabledBtn ? "text-slate-400" : "text-white"}`}>
+                                    Procesando...
+                                </Text>
+                            </View>
+                        ) : (
+                            <Text className={`font-bold text-lg ${disabledBtn ? "text-slate-400" : "text-white"}`}>
+                                Crear Usuario
+                            </Text>
+                        )}
+                    </Pressable>
+
+                </View>
+                
+                {/* Nota inferior opcional */}
+                <Text className="text-center text-slate-400 text-xs mt-6 px-10">
+                    Al crear el usuario, podrá comenzar a acumular puntos inmediatamente en {business?.name || "tu negocio"}.
+                </Text>
+
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Safe>
     </View>
   );
 }
